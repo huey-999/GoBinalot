@@ -83,19 +83,81 @@
       box-shadow: 0 6px 20px rgba(46, 111, 64, 0.4);
     }
 
-    .btn-outline-custom {
-      border: 2px solid var(--primary-color);
-      color: var(--primary-color);
-      font-weight: 600;
-      padding: 0.75rem 1.75rem;
-      border-radius: 50px;
-      transition: all 0.3s ease;
+    .modal-action-btn {
+      min-height: 52px;
+      padding: 0.72rem 1.35rem;
+      border-radius: 12px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      transition: all 0.2s ease;
+      box-shadow: none;
     }
 
-    .btn-outline-custom:hover {
+    .modal-action-row {
+      margin-top: 1.75rem;
+    }
+
+    .modal-action-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .modal-action-btn.btn-primary-custom {
+      min-width: 200px;
+    }
+
+    .modal-action-btn.btn-outline-secondary {
+      border-width: 2px;
+      min-width: 140px;
+    }
+
+    .modal-form-btn {
+      min-height: 40px;
+      padding: 0.38rem 0.9rem;
+      border-radius: 10px;
+      font-size: 0.92rem;
+      font-weight: 700;
+      line-height: 1.2;
+      transition: all 0.2s ease;
+      box-shadow: none;
+      width: auto;
+      flex: 0 0 auto;
+      margin-bottom: 0;
+    }
+
+    .modal-form-row {
+      margin-top: 1.5rem;
+      margin-bottom: 0;
+    }
+
+    .modal-form-btn.btn-primary-custom {
+      min-width: 130px;
       background-color: var(--primary-color);
+      border-color: var(--primary-color);
       color: #ffffff;
-      transform: translateY(-2px);
+    }
+
+    .modal-form-btn.btn-primary-custom:hover {
+      background-color: var(--primary-hover);
+      border-color: var(--primary-hover);
+      color: #ffffff;
+      transform: translateY(-1px);
+      box-shadow: none;
+    }
+
+    .modal-form-btn.btn-outline-secondary {
+      min-width: 105px;
+      border-width: 2px;
+      background-color: transparent;
+      border-color: #d5d8d4;
+      color: var(--text-main);
+    }
+
+    .modal-form-btn.btn-outline-secondary:hover {
+      background-color: #f3f4f3;
+      border-color: #c5c8c3;
+      color: var(--text-main);
+      transform: translateY(-1px);
     }
 
     .section-title {
@@ -1230,4 +1292,257 @@
       .topbar input.form-control.form-control-sm {
         width: 160px;
       }
+    }
+
+    /* Customer Settings Page */
+    .settings-page {
+      padding-top: 0.5rem;
+    }
+
+    .settings-page .page-header {
+      margin-top: 0.25rem;
+      margin-bottom: 1.25rem !important;
+      padding-top: 0.25rem;
+    }
+
+    .settings-layout.single-panel {
+      display: flex;
+      justify-content: flex-start;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .settings-profile-single {
+      max-width: 100%;
+      width: 100%;
+      margin: 0;
+    }
+
+    .settings-layout.has-address-panel {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .settings-layout.has-address-panel > [class*='col-'] {
+      display: flex;
+      flex: 1 1 0;
+      max-width: none;
+      min-width: 0;
+    }
+
+    .settings-hero {
+      background: rgba(46, 111, 64, 0.02);
+      border: 1px solid rgba(46, 111, 64, 0.08);
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .profile-avatar-wrap {
+      position: relative;
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 2px solid rgba(46, 111, 64, 0.1);
+      background: #edf6ee;
+    }
+
+    .profile-avatar-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .avatar-edit-btn {
+      position: absolute;
+      right: -2px;
+      bottom: 0;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--primary-color);
+      color: #fff;
+      border: 2px solid #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.64rem;
+      cursor: pointer;
+      box-shadow: 0 3px 8px rgba(46, 111, 64, 0.18);
+    }
+
+    .settings-form .form-label {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .settings-form .form-control,
+    .settings-form .form-select,
+    .settings-form textarea.form-control {
+      border: 1px solid rgba(46, 111, 64, 0.14);
+      border-radius: 10px;
+      min-height: 40px;
+      padding: 0.55rem 0.7rem;
+      font-size: 0.86rem;
+      color: var(--text-main);
+      background-color: #fff;
+    }
+
+    .settings-form .form-control:focus,
+    .settings-form .form-select:focus,
+    .settings-form textarea.form-control:focus {
+      border-color: rgba(46, 111, 64, 0.5);
+      box-shadow: 0 0 0 0.18rem rgba(46, 111, 64, 0.1);
+      outline: none;
+    }
+
+    .settings-form .btn-primary-custom {
+      border-radius: 10px;
+      padding: 0.6rem 0.9rem;
+      min-width: 140px;
+      font-size: 0.86rem;
+    }
+
+    .btn-secondary-soft {
+      background: rgba(46, 111, 64, 0.04);
+      color: var(--primary-color);
+      border: 1px solid rgba(46, 111, 64, 0.12);
+      border-radius: 10px;
+      padding: 0.6rem 0.9rem;
+      font-weight: 600;
+      font-size: 0.86rem;
+    }
+
+    .btn-secondary-soft:hover {
+      background: rgba(46, 111, 64, 0.08);
+      color: var(--primary-color);
+    }
+
+    .address-list {
+      display: grid;
+      gap: 0.7rem;
+    }
+
+    .address-item {
+      background: #fff;
+      border: 1px solid rgba(46, 111, 64, 0.1);
+      border-radius: 10px;
+      padding: 0.8rem 0.9rem;
+      transition: all 0.2s ease;
+    }
+
+    .address-item:hover {
+      border-color: rgba(46, 111, 64, 0.2);
+      box-shadow: 0 4px 10px rgba(46, 111, 64, 0.04);
+    }
+
+    .address-item .badge {
+      font-size: 0.66rem;
+      padding: 0.28rem 0.5rem;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+
+    .address-item .address-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin: 0.45rem 0 0.3rem;
+    }
+
+    .address-item .address-copy {
+      margin: 0;
+      color: var(--text-muted);
+      line-height: 1.5;
+      font-size: 0.8rem;
+    }
+
+    .address-buttons {
+      display: flex;
+      gap: 0.45rem;
+      margin-top: 0.7rem;
+      flex-wrap: wrap;
+    }
+
+    .address-buttons .btn {
+      border-radius: 8px;
+      padding: 0.42rem 0.68rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    .address-item.default {
+      background: linear-gradient(180deg, rgba(46, 111, 64, 0.02), rgba(46, 111, 64, 0.04));
+      border-color: rgba(46, 111, 64, 0.2);
+    }
+
+    .settings-card.nested {
+      background: rgba(46, 111, 64, 0.015);
+      border: 1px solid rgba(46, 111, 64, 0.08);
+      border-radius: 10px;
+      margin-top: 0.9rem;
+      box-shadow: none;
+    }
+
+    .settings-card.nested .card-header {
+      background: transparent;
+      border-bottom: 1px solid rgba(46, 111, 64, 0.08);
+      padding: 0.7rem 0.8rem;
+    }
+
+    .settings-card.nested .card-body {
+      padding: 0.8rem;
+    }
+
+    @media (max-width: 991.98px) {
+      .settings-hero {
+        padding: 0.75rem 0.9rem;
+      }
+
+      .settings-card .card-header,
+      .settings-card .card-body {
+        padding-left: 0.8rem;
+        padding-right: 0.8rem;
+      }
+    }
+
+    @media (max-width: 575.98px) {
+      .settings-form .btn-primary-custom,
+      .settings-form .btn-secondary-soft {
+        width: 100%;
+      }
+    }
+
+    .settings-layout.single-panel {
+      display: flex;
+      justify-content: flex-start;
+      width: 100%;
+    }
+
+    .settings-profile-single {
+      max-width: 100%;
+      width: 100%;
+      margin: 0;
+    }
+
+    .settings-layout.has-address-panel {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+    }
+
+    .settings-layout.has-address-panel > [class*='col-'] {
+      display: flex;
+      flex: 1 1 0;
+      max-width: none;
+      min-width: 0;
     }

@@ -12,6 +12,42 @@ document.addEventListener('DOMContentLoaded', function () {
     dateInput.setAttribute('min', today);
   }
 
+  // Mobile sidebar toggle for admin pages
+  const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+  const sidebar = document.getElementById('sidebar');
+  const sidebarBackdrop = document.querySelector('.sidebar-backdrop');
+
+  function setSidebarState(isOpen) {
+    if (!sidebar) return;
+
+    sidebar.classList.toggle('show', isOpen);
+
+    if (sidebarBackdrop) {
+      sidebarBackdrop.classList.toggle('show', isOpen);
+      sidebarBackdrop.style.display = isOpen ? 'block' : 'none';
+    }
+  }
+
+  if (sidebarToggleBtn) {
+    sidebarToggleBtn.addEventListener('click', function () {
+      if (!sidebar) return;
+      const isOpen = !sidebar.classList.contains('show');
+      setSidebarState(isOpen);
+    });
+  }
+
+  if (sidebarBackdrop) {
+    sidebarBackdrop.addEventListener('click', function () {
+      setSidebarState(false);
+    });
+  }
+
+  window.addEventListener('resize', function () {
+    if (window.innerWidth > 991.98) {
+      setSidebarState(false);
+    }
+  });
+
   /* ==========================================================================
      1. STICKY NAVBAR SHADOW & MOBILE NAV TOGGLE
      ========================================================================== */
@@ -189,69 +225,367 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  // Admin sidebar handling
-  const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
-  const sidebar = document.getElementById('sidebar');
-  const sidebarBackdrop = document.querySelector('.sidebar-backdrop');
-  const sidebarNavLinks = document.querySelectorAll('.sidebar .nav-link');
-  const adminTabs = document.querySelectorAll('.sidebar .nav-link[data-bs-toggle="tab"]');
+  /* ==========================================================================
+     4. REGISTRATION / LOGIN VALIDATION & PASSWORD STRENGTH
+     ========================================================================== */
+  const registerForm = document.getElementById('registerForm');
+  const registerAlert = document.getElementById('registerAlert');
+  const regPasswordInput = document.getElementById('regPassword');
+  const confirmPasswordInput = document.getElementById('confirmPassword');
+  const passwordStrengthBar = document.getElementById('passwordStrength');
 
-  function toggleSidebar(show) {
-    if (!sidebar || !sidebarBackdrop) return;
+  function getPasswordStrength(value) {
+    if (!value) return '';
 
-    if (show) {
-      sidebar.classList.add('show');
-      sidebarBackdrop.classList.add('show');
-      document.body.style.overflow = 'hidden';
-    } else {
-      sidebar.classList.remove('show');
-      sidebarBackdrop.classList.remove('show');
-      document.body.style.overflow = '';
+    let score = 0;
+
+    if (value.length >= 8) score += 1;
+    if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score += 1;
+    if (/\d/.test(value)) score += 1;
+    if (/[^A-Za-z0-9]/.test(value)) score += 1;
+
+    if (score <= 2) return 'weak';
+    if (score === 3) return 'medium';
+    return 'strong';
+  }
+
+  function updatePasswordStrengthMeter() {
+    if (!regPasswordInput || !passwordStrengthBar) return;
+
+    const strength = getPasswordStrength(regPasswordInput.value);
+    passwordStrengthBar.setAttribute('data-strength', strength || '');
+  }
+
+  function applyValidationState(field, isValid) {
+    if (!field) return;
+
+    const inputGroup = field.closest('.input-group');
+    const formCheck = field.closest('.form-check');
+    const feedback = field.closest('.mb-3, .col-sm-6, .form-check')?.querySelector('.invalid-feedback');
+
+    field.classList.toggle('is-invalid', !isValid);
+    field.classList.toggle('is-valid', isValid && Boolean(field.value || field.checked));
+
+    if (inputGroup) {
+      inputGroup.classList.toggle('is-invalid', !isValid);
+      inputGroup.classList.toggle('is-valid', isValid);
+    }
+
+    if (formCheck) {
+      formCheck.classList.toggle('is-invalid', !isValid);
+      formCheck.classList.toggle('is-valid', isValid);
+    }
+
+    if (feedback) {
+      feedback.style.display = isValid ? 'none' : 'block';
     }
   }
 
-  if (sidebarToggleBtn) {
-    sidebarToggleBtn.addEventListener('click', function () {
-      const isOpen = sidebar && sidebar.classList.contains('show');
-      toggleSidebar(!isOpen);
-    });
+  function setFieldValidity(field, message) {
+    if (!field) return;
+    field.setCustomValidity(message || '');
+    applyValidationState(field, !message);
   }
 
-  if (sidebarBackdrop) {
-    sidebarBackdrop.addEventListener('click', function () {
-      toggleSidebar(false);
-    });
-  }
+  function validateRegisterField(field) {
+    if (!field) return true;
 
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && sidebar && sidebar.classList.contains('show')) {
-      toggleSidebar(false);
+    const value = field.value.trim();
+    const fieldId = field.id;
+
+    if (fieldId === 'firstName' || fieldId === 'lastName') {
+      if (!value) {
+        setFieldValidity(field, 'This field is required.');
+        return false;
+      }
+      setFieldValidity(field, '');
+      return true;
     }
-  });
 
-  if (sidebarNavLinks.length > 0) {
-    const currentPage = window.location.pathname.split('/').pop() || 'dashboard.php';
+    if (fieldId === 'regEmail') {
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!value) {
+        setFieldValidity(field, 'Email is required.');
+        return false;
+      }
+      if (!emailPattern.test(value)) {
+        setFieldValidity(field, 'Please enter a valid email address.');
+        return false;
+      }
+      setFieldValidity(field, '');
+      return true;
+    }
 
-    sidebarNavLinks.forEach(link => {
-      const href = (link.getAttribute('href') || '').split('?')[0].split('#')[0];
-      link.classList.remove('active');
+    if (fieldId === 'regPhone') {
+      const phonePattern = /^(09|\+639)\d{9}$/;
+      if (!value) {
+        setFieldValidity(field, 'Phone number is required.');
+        return false;
+      }
+      if (!phonePattern.test(value)) {
+        setFieldValidity(field, 'Please enter a valid PH mobile number (e.g. 09171234567).');
+        return false;
+      }
+      setFieldValidity(field, '');
+      return true;
+    }
 
-      if (href && href.endsWith(currentPage)) {
-        link.classList.add('active');
+    if (fieldId === 'regPassword') {
+      if (!value) {
+        setFieldValidity(field, 'Password is required.');
+        return false;
+      }
+      if (value.length < 8) {
+        setFieldValidity(field, 'Password must be at least 8 characters long.');
+        return false;
+      }
+      setFieldValidity(field, '');
+      return true;
+    }
+
+    if (fieldId === 'confirmPassword') {
+      if (!value) {
+        setFieldValidity(field, 'Please confirm your password.');
+        return false;
+      }
+      if (value !== regPasswordInput.value) {
+        setFieldValidity(field, 'Passwords do not match.');
+        return false;
+      }
+      setFieldValidity(field, '');
+      return true;
+    }
+
+    if (fieldId === 'agreeTerms') {
+      if (!field.checked) {
+        setFieldValidity(field, 'You must agree before submitting.');
+        return false;
+      }
+      setFieldValidity(field, '');
+      return true;
+    }
+
+    return true;
+  }
+
+  function validateRegisterForm() {
+    if (!registerForm) return true;
+
+    let isValid = true;
+    const fieldsToValidate = [
+      document.getElementById('firstName'),
+      document.getElementById('lastName'),
+      document.getElementById('regEmail'),
+      document.getElementById('regPhone'),
+      document.getElementById('regPassword'),
+      document.getElementById('confirmPassword'),
+      document.getElementById('agreeTerms')
+    ];
+
+    fieldsToValidate.forEach(function (field) {
+      if (!validateRegisterField(field)) {
+        isValid = false;
+      }
+    });
+
+    if (regPasswordInput && confirmPasswordInput && confirmPasswordInput.value && regPasswordInput.value !== confirmPasswordInput.value) {
+      setFieldValidity(confirmPasswordInput, 'Passwords do not match.');
+      isValid = false;
+    }
+
+    return isValid;
+  }
+
+  if (regPasswordInput) {
+    regPasswordInput.addEventListener('input', function () {
+      updatePasswordStrengthMeter();
+      if (confirmPasswordInput && confirmPasswordInput.value) {
+        validateRegisterField(confirmPasswordInput);
+      }
+      validateRegisterField(regPasswordInput);
+    });
+  }
+
+  if (confirmPasswordInput) {
+    confirmPasswordInput.addEventListener('input', function () {
+      validateRegisterField(confirmPasswordInput);
+    });
+  }
+
+  if (registerForm) {
+    registerForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      registerForm.classList.remove('was-validated');
+      registerForm.classList.add('was-validated');
+
+      if (!validateRegisterForm()) {
+        if (registerAlert) {
+          registerAlert.textContent = 'Please fix the errors below before submitting.';
+          registerAlert.classList.remove('d-none');
+        }
+
+        const firstInvalidField = registerForm.querySelector(':invalid, .is-invalid');
+        if (firstInvalidField) {
+          firstInvalidField.focus();
+        }
+        return;
+      }
+
+      if (registerAlert) {
+        registerAlert.classList.add('d-none');
+      }
+
+      registerForm.submit();
+    });
+
+    registerForm.querySelectorAll('input').forEach(function (input) {
+      input.addEventListener('input', function () {
+        if (!registerForm.classList.contains('was-validated')) return;
+        validateRegisterField(this);
+      });
+
+      input.addEventListener('blur', function () {
+        if (!registerForm.classList.contains('was-validated')) return;
+        validateRegisterField(this);
+      });
+    });
+  }
+
+  if (passwordStrengthBar) {
+    passwordStrengthBar.setAttribute('data-strength', '');
+  }
+
+  const loginForm = document.getElementById('loginForm');
+  const loginAlert = document.getElementById('loginAlert');
+  const loginEmailInput = document.getElementById('loginEmail');
+  const loginPasswordInput = document.getElementById('loginPassword');
+
+  function validateLoginField(field) {
+    if (!field) return true;
+
+    const fieldId = field.id;
+    const value = field.value.trim();
+
+    if (fieldId === 'loginEmail') {
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const phonePattern = /^(09|\+639)\d{9}$/;
+
+      if (!value) {
+        setFieldValidity(field, 'Email is required.');
+        return false;
+      }
+
+      if (!emailPattern.test(value) && !phonePattern.test(value)) {
+        setFieldValidity(field, 'Please enter a valid email or phone number.');
+        return false;
+      }
+
+      setFieldValidity(field, '');
+      return true;
+    }
+
+    if (fieldId === 'loginPassword') {
+      if (!value) {
+        setFieldValidity(field, 'Password is required.');
+        return false;
+      }
+
+      if (value.length < 8) {
+        setFieldValidity(field, 'Password must be at least 8 characters long.');
+        return false;
+      }
+
+      setFieldValidity(field, '');
+      return true;
+    }
+
+    return true;
+  }
+
+  function validateLoginForm() {
+    if (!loginForm) return true;
+
+    let isValid = true;
+    const fieldsToValidate = [loginEmailInput, loginPasswordInput];
+
+    fieldsToValidate.forEach(function (field) {
+      if (!validateLoginField(field)) {
+        isValid = false;
+      }
+    });
+
+    return isValid;
+  }
+
+  if (loginEmailInput) {
+    loginEmailInput.addEventListener('input', function () {
+      if (loginForm && loginForm.classList.contains('was-validated')) {
+        validateLoginField(this);
       }
     });
   }
 
-  if (adminTabs.length > 0) {
-    adminTabs.forEach(tab => {
-      tab.addEventListener('shown.bs.tab', function (e) {
-        sidebarNavLinks.forEach(l => l.classList.remove('active'));
-        e.target.classList.add('active');
-
-        if (window.innerWidth < 992) {
-          toggleSidebar(false);
-        }
-      });
+  if (loginPasswordInput) {
+    loginPasswordInput.addEventListener('input', function () {
+      if (loginForm && loginForm.classList.contains('was-validated')) {
+        validateLoginField(this);
+      }
     });
   }
+
+  if (loginForm) {
+    loginForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      loginForm.classList.remove('was-validated');
+      loginForm.classList.add('was-validated');
+
+      if (!validateLoginForm()) {
+        if (loginAlert) {
+          loginAlert.textContent = 'Invalid email address or password. Please try again.';
+          loginAlert.classList.remove('d-none');
+        }
+        const invalidField = loginForm.querySelector(':invalid, .is-invalid');
+        if (invalidField) invalidField.focus();
+        return;
+      }
+
+      if (loginAlert) {
+        loginAlert.classList.add('d-none');
+      }
+
+      loginForm.submit();
+    });
+  }
+
+  const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+  const togglePasswordIcon = document.getElementById('togglePasswordIcon');
+  const toggleRegPasswordBtn = document.getElementById('toggleRegPasswordBtn');
+  const toggleRegPasswordIcon = document.getElementById('toggleRegPasswordIcon');
+
+  function togglePasswordVisibility(button, icon, inputId) {
+    const input = document.getElementById(inputId);
+    if (!button || !icon || !input) return;
+
+    const isPasswordVisible = input.type === 'text';
+    input.type = isPasswordVisible ? 'password' : 'text';
+    icon.classList.toggle('fa-eye', isPasswordVisible);
+    icon.classList.toggle('fa-eye-slash', !isPasswordVisible);
+    button.setAttribute('aria-label', isPasswordVisible ? 'Show password' : 'Hide password');
+  }
+
+  if (togglePasswordBtn && togglePasswordIcon) {
+    togglePasswordBtn.addEventListener('click', function () {
+      togglePasswordVisibility(togglePasswordBtn, togglePasswordIcon, 'loginPassword');
+    });
+  }
+
+  if (toggleRegPasswordBtn && toggleRegPasswordIcon) {
+    toggleRegPasswordBtn.addEventListener('click', function () {
+      togglePasswordVisibility(toggleRegPasswordBtn, toggleRegPasswordIcon, 'regPassword');
+    });
+  }
+
+  /* ==========================================================================
+     5. EXISTING FEATURE LOGIC CONTINUES
+     ========================================================================== */
 });

@@ -2,13 +2,26 @@
 
 <main class="main-content">
   <div class="tab-content">
-    <div class="tab-pane fade show active" id="menu-tab">
-      <div class="page-header d-flex justify-content-between align-items-center">
-        <div>
-          <h1 class="dashboard-heading">Menu Management</h1>
-          <p class="page-subtitle">Manage food items, pricing, availability, and store settings.</p>
+    <!-- TABS: MENU ITEMS | CATEGORIES -->
+    <ul class="nav nav-tabs mb-3" id="menuTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="menu-items-tab" data-bs-toggle="tab" data-bs-target="#menu-items-tab-pane" type="button" role="tab">Menu Items</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="categories-tab" data-bs-toggle="tab" data-bs-target="#categories-tab-pane" type="button" role="tab">Categories</button>
+      </li>
+    </ul>
+
+    <div class="tab-content" id="menuTabsContent">
+
+      <!-- TAB 1: MENU ITEMS -->
+      <div class="tab-pane fade show active" id="menu-items-tab-pane" role="tabpanel">
+        <div class="page-header d-flex justify-content-between align-items-center">
+          <div>
+            <h1 class="dashboard-heading">Menu Management</h1>
+            <p class="page-subtitle">Manage food items, pricing, availability, and store settings.</p>
+          </div>
         </div>
-      </div>
 
       <div class="row g-3 mb-3">
         <div class="col-sm-6 col-xl-3">
@@ -207,6 +220,88 @@
         </div>
       </div>
     </div>
+
+    <!-- TAB 2: CATEGORIES -->
+    <div class="tab-pane fade" id="categories-tab-pane" role="tabpanel">
+      <div class="page-header d-flex justify-content-between align-items-center">
+        <div>
+          <h1 class="dashboard-heading">Menu Categories</h1>
+          <p class="page-subtitle">Manage food categories used to group your menu items.</p>
+        </div>
+      </div>
+
+      <div class="table-card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="fw-bold text-success mb-0">Categories</h4>
+          <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+            <i class="fa-solid fa-plus me-1"></i> Add Category
+          </button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="fw-bold">Binalot Meals</td>
+                <td class="text-muted small">Traditional Filipino binalot wrapped in banana leaf</td>
+                <td><span class="badge bg-success">Active</span></td>
+                <td>
+                  <div class="d-flex flex-wrap gap-1">
+                    <button class="btn btn-xs btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editCategoryModal"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-xs btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="fw-bold">Soups & Main</td>
+                <td class="text-muted small">Hearty soups and main course dishes</td>
+                <td><span class="badge bg-success">Active</span></td>
+                <td>
+                  <div class="d-flex flex-wrap gap-1">
+                    <button class="btn btn-xs btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editCategoryModal"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-xs btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="fw-bold">Desserts & Drinks</td>
+                <td class="text-muted small">Sweet treats and refreshing beverages</td>
+                <td><span class="badge bg-success">Active</span></td>
+                <td>
+                  <div class="d-flex flex-wrap gap-1">
+                    <button class="btn btn-xs btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editCategoryModal"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-xs btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="fw-bold">Add-ons</td>
+                <td class="text-muted small">Extra toppings and side items</td>
+                <td><span class="badge bg-secondary">Inactive</span></td>
+                <td>
+                  <div class="d-flex flex-wrap gap-1">
+                    <button class="btn btn-xs btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editCategoryModal"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-xs btn-outline-danger"><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </div>
 </main>
 
@@ -255,7 +350,10 @@
             <label class="form-check-label small">Available for order</label>
           </div>
 
-          <button type="submit" class="btn btn-success btn-sm w-100">Save Item</button>
+          <div class="d-flex gap-2 modal-form-row">
+            <button type="submit" class="btn btn-primary-custom modal-form-btn">Save Item</button>
+            <button type="button" class="btn btn-outline-secondary modal-form-btn" data-bs-dismiss="modal">Cancel</button>
+          </div>
         </form>
       </div>
     </div>
@@ -301,7 +399,10 @@
             <label class="form-check-label small">Available</label>
           </div>
 
-          <button type="submit" class="btn btn-success btn-sm w-100">Update Item</button>
+          <div class="d-flex gap-2 modal-form-row">
+            <button type="submit" class="btn btn-primary-custom modal-form-btn">Update Item</button>
+            <button type="button" class="btn btn-outline-secondary modal-form-btn" data-bs-dismiss="modal">Cancel</button>
+          </div>
         </form>
       </div>
     </div>
@@ -339,6 +440,78 @@
       <div class="modal-footer border-0 pt-0">
         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
         <button type="button" class="btn btn-danger btn-sm">Archive</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CATEGORY MODAL -->
+<div class="modal fade" id="addCategoryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-sm">
+      <div class="modal-header border-0 pb-2">
+        <h5 class="modal-title fw-bold text-success">Add New Category</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body p-3">
+        <form>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Category Name</label>
+            <input type="text" class="form-control form-control-sm" placeholder="e.g. Rice Meals, Grilled, Seafood" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Description</label>
+            <textarea class="form-control form-control-sm" rows="2" placeholder="Brief description of this category..."></textarea>
+          </div>
+
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" checked>
+            <label class="form-check-label small">Active (visible to customers)</label>
+          </div>
+
+        <div class="d-flex gap-2 modal-form-row">
+          <button type="submit" class="btn btn-primary-custom modal-form-btn">Save Category</button>
+          <button type="button" class="btn btn-outline-secondary modal-form-btn" data-bs-dismiss="modal">Close</button>
+        </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT CATEGORY MODAL -->
+<div class="modal fade" id="editCategoryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-sm">
+      <div class="modal-header border-0 pb-2">
+        <h5 class="modal-title fw-bold text-success">Edit Category</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body p-3">
+        <form>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Category Name</label>
+            <input type="text" class="form-control form-control-sm" value="Binalot Meals" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Description</label>
+            <textarea class="form-control form-control-sm" rows="2">Traditional Filipino binalot wrapped in banana leaf</textarea>
+          </div>
+
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" checked>
+            <label class="form-check-label small">Active (visible to customers)</label>
+          </div>
+
+        <div class="d-flex gap-2 modal-form-row">
+          <button type="submit" class="btn btn-primary-custom modal-form-btn">Update Category</button>
+          <button type="button" class="btn btn-outline-secondary modal-form-btn" data-bs-dismiss="modal">Close</button>
+        </div>
+        </form>
       </div>
     </div>
   </div>
