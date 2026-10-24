@@ -1,4 +1,10 @@
 <?php
+
+include 'config.php';
+include 'auth.php';
+
+requireLogin('../login.php');
+
 $currentPage = basename($_SERVER['PHP_SELF']);
 $pageTitleMap = [
   'dashboard.php' => 'Dashboard',
@@ -7,6 +13,8 @@ $pageTitleMap = [
   'deliveries.php' => 'Delivery',
   'menus.php' => 'Menu',
   'reports.php' => 'Reports',
+  'settings.php' => 'Settings',
+  'profile.php' => 'Profile',
   'login.php' => 'Login',
   'register.php' => 'Register'
 ];
@@ -42,7 +50,7 @@ $pageTitle = $pageTitleMap[$currentPage] ?? 'GoBinalot';
       <button class="sidebar-toggle-btn" id="sidebarToggleBtn" aria-label="Toggle Sidebar">
         <i class="fa-solid fa-bars"></i>
       </button>
-      <a class="navbar-brand d-flex align-items-center gap-2" href="dashboard.php">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="<?= ($_SESSION['user_data']['role'] == 'admin' ? 'dashboard.php' : 'orders.php'); ?> ">
         <img id="restaurant-logo" src="../img/logo.jpg" alt="Binalot sa Bukid Logo" style="height: 40px; width: auto;">
         <span class="fw-bold fs-5 text-success font-heading d-none d-sm-inline">GoBinalot</span>
       </a>
@@ -66,13 +74,13 @@ $pageTitle = $pageTitleMap[$currentPage] ?? 'GoBinalot';
       <div class="dropdown">
         <a href="#" class="d-flex align-items-center gap-2 text-decoration-none dropdown-toggle" data-bs-toggle="dropdown">
           <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="Admin Avatar" class="rounded-circle" style="width: 38px; height: 38px; object-fit: cover;">
-          <span class="fw-semibold small text-dark d-none d-lg-inline">Manager Admin</span>
+          <span class="fw-semibold small text-dark d-none d-lg-inline"><?php echo $_SESSION['user_data']['name']; ?></span>
         </a>
         <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2">
-          <li><a class="dropdown-item small" href="#"><i class="fa-regular fa-user me-2"></i>Profile</a></li>
-          <li><a class="dropdown-item small" href="#"><i class="fa-solid fa-sliders me-2"></i>Settings</a></li>
+          <li><a class="dropdown-item small" href="profile.php"><i class="fa-regular fa-user me-2"></i>Profile</a></li>
+          <li><a class="dropdown-item small" href="settings.php"><i class="fa-solid fa-sliders me-2"></i>Settings</a></li>
           <li><hr class="dropdown-divider"></li>
-          <li><a class="dropdown-item small text-danger" href="login.html"><i class="fa-solid fa-right-from-bracket me-2"></i>Logout</a></li>
+          <li><a class="dropdown-item small text-danger" onclick="return confirm('Are you sure you want to logout?');" href="../logout.php"><i class="fa-solid fa-right-from-bracket me-2"></i>Logout</a></li>
         </ul>
       </div>
     </div>

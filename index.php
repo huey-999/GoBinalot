@@ -22,7 +22,7 @@
   <!-- ==========================================================================
        ========================= INTERACTIVE MENU SECTION ======================
        ========================================================================== -->
-  <section id="menu" class="py-5">
+  <section id="menu" class="pt-5">
     <div class="container py-4">
       <div class="text-center section-title">
         <span class="text-uppercase text-muted small fw-bold" style="letter-spacing: 1px;">Home-Style Specialties</span>

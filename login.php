@@ -1,4 +1,11 @@
-<?php include 'includes/header.php'; ?>
+<?php 
+
+include 'includes/header.php';
+include 'includes/auth.php';
+
+redirectIfAuthenticated('gb/dashboard.php');
+
+?>
 
   <!-- ==========================================================================
        ========================= MAIN LOGIN SECTION =============================
@@ -19,16 +26,18 @@
         </div>
 
         <!-- Login Form -->
-        <form id="loginForm" class="needs-validation" novalidate>
+        <form action="includes/actions.php" method="post" id="loginForm" class="needs-validation" novalidate>
+          <input type="hidden" name="form_type" value="login">
           
           <!-- Email / Mobile Input -->
           <div class="mb-3">
-            <label for="loginEmail" class="form-label fw-semibold small">Email Address or Mobile</label>
+            <!-- <label for="loginEmail" class="form-label fw-semibold small">Email Address or Mobile</label> -->
+            <label for="loginEmail" class="form-label fw-semibold small">Email Address</label>
             <div class="input-group">
               <span class="input-group-text"><i class="fa-solid fa-envelope"></i></span>
-              <input type="email" class="form-control" id="loginEmail" placeholder="juan@example.com" required>
-              <div class="invalid-feedback">Please enter a valid email or phone number.</div>
+              <input type="text" class="form-control" id="loginEmail" name="loginEmail" placeholder="juan@example.com" required>
             </div>
+            <div class="invalid-feedback">Please enter a valid email or phone number.</div>
           </div>
 
           <!-- Password Input -->
@@ -39,12 +48,12 @@
             </div>
             <div class="input-group">
               <span class="input-group-text"><i class="fa-solid fa-lock"></i></span>
-              <input type="password" class="form-control" id="loginPassword" placeholder="••••••••" required>
+              <input type="password" class="form-control" id="loginPassword" name="loginPassword" placeholder="••••••••" required>
               <button class="btn btn-outline-secondary" type="button" id="togglePasswordBtn">
                 <i class="fa-solid fa-eye" id="togglePasswordIcon"></i>
               </button>
-              <div class="invalid-feedback">Please enter your password.</div>
             </div>
+            <div class="invalid-feedback">Please enter your password.</div>
           </div>
 
           <!-- Remember Me Checkbox -->
@@ -56,7 +65,7 @@
           </div>
 
           <!-- Submit Button -->
-          <button type="submit" class="btn btn-primary-custom w-100 py-2.5 text-uppercase fw-bold">
+          <button type="submit" name="login" class="btn btn-primary-custom w-100 py-2.5 text-uppercase fw-bold">
             <i class="fa-solid fa-right-to-bracket me-2"></i>Sign In
           </button>
         </form>
