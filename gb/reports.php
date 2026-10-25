@@ -82,7 +82,7 @@
         </div>
 
         <div class="table-responsive">
-          <table class="table table-hover align-middle table-sm mb-0">
+          <table class="table table-hover align-middle table-sm mb-0 datatable-table">
             <thead class="table-light">
               <tr>
                 <th>Date</th>
@@ -148,7 +148,7 @@
         </div>
 
         <div class="table-responsive">
-          <table class="table table-hover align-middle table-sm mb-0">
+          <table class="table table-hover align-middle table-sm mb-0 datatable-table">
             <thead class="table-light">
               <tr>
                 <th>Order ID</th>

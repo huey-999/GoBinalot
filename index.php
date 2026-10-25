@@ -1,5 +1,30 @@
 <?php include 'includes/header.php'; ?>
 
+<?php
+$activeCategories = $conn->query(
+    "SELECT id, name, status
+     FROM categories
+     WHERE status = 'active'
+     ORDER BY name ASC"
+)->fetchAll(PDO::FETCH_ASSOC);
+
+$menuItems = $conn->query(
+    "SELECT m.*, c.name AS category_name
+     FROM menu_items m
+     LEFT JOIN categories c ON c.id = m.category_id
+     WHERE m.is_available = 'Y'
+       AND c.status = 'active'
+     ORDER BY c.name ASC"
+)->fetchAll(PDO::FETCH_ASSOC);
+
+function gobinalotMenuSlug($value) {
+    $slug = strtolower(trim((string) $value));
+    $slug = preg_replace('/[^a-z0-9\s-]/', '', $slug);
+    $slug = preg_replace('/\s+/', '-', $slug);
+    return trim($slug, '-');
+}
+?>
+
   <!-- ==========================================================================
        ========================= HERO SECTION ===================================
        ========================================================================== -->
@@ -29,120 +54,48 @@
         <h2 class="display-5 fw-bold text-success">Our Binalot Menu</h2>
       </div>
 
-      <!-- Menu Category Filters -->
       <div class="menu-nav text-center mb-4">
         <div class="nav nav-pills justify-content-center" id="menu-tabs">
           <button class="nav-link active" data-filter="all">All</button>
-          <button class="nav-link" data-filter="binalot">Binalot Meals</button>
-          <button class="nav-link" data-filter="sabaw">Soups & Main Courses</button>
-          <button class="nav-link" data-filter="merienda">Desserts & Drinks</button>
+          <?php foreach ($activeCategories as $category) : ?>
+            <?php $categoryFilter = gobinalotMenuSlug($category['name']); ?>
+            <button class="nav-link" data-filter="<?= htmlspecialchars($categoryFilter) ?>"><?= htmlspecialchars($category['name']) ?></button>
+          <?php endforeach; ?>
         </div>
       </div>
 
-      <!-- Menu Items Grid -->
-      <div class="row g-4" id="menu-items-container">
-
-        <!-- ITEM 1: Binalot Inasal -->
-        <div class="col-md-6 col-lg-4 menu-item-card" data-category="binalot">
-          <div class="menu-card">
-            <div class="menu-img-wrapper">
-              <img src="https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80" class="menu-img" alt="Chicken Inasal Binalot">
-            </div>
-            <div class="card-body p-4">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <h5 class="card-title fw-bold mb-0">Chicken Inasal Binalot</h5>
-                <span class="menu-price">₱185</span>
+      <?php if (!empty($menuItems)) : ?>
+        <div class="row g-4" id="menu-items-container">
+          <?php foreach ($menuItems as $menu) : ?>
+            <?php $categorySlug = gobinalotMenuSlug($menu['category_name'] ?? 'uncategorized'); ?>
+            <div class="col-md-6 col-lg-4 menu-item-card" data-category="<?= htmlspecialchars($categorySlug) ?>">
+              <div class="menu-card">
+                <div class="menu-img-wrapper">
+                  <img src="<?= !empty($menu['image']) ? 'img/menu/' . htmlspecialchars($menu['image']) : 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80'; ?>" class="menu-img" alt="<?= htmlspecialchars($menu['name']) ?>">
+                </div>
+                <div class="card-body p-4">
+                  <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="card-title fw-bold mb-0"><?= htmlspecialchars($menu['name']) ?></h5>
+                    <span class="menu-price">₱<?= number_format((float) $menu['price'], 2) ?></span>
+                  </div>
+                  <?php if (($menu['category_name'] ?? '') === 'Binalot Meals') : ?>
+                    <span class="badge badge-leaf text-white mb-2"><i class="fa-solid fa-leaf me-1"></i>Bestseller</span>
+                  <?php endif; ?>
+                  <p class="card-text text-muted small"><?= htmlspecialchars($menu['description'] ?: 'Freshly prepared with care and served with a warm Filipino touch.') ?></p>
+                </div>
               </div>
-              <span class="badge badge-leaf text-white mb-2"><i class="fa-solid fa-leaf me-1"></i>Bestseller</span>
-              <p class="card-text text-muted small">Grilled marinated chicken infused with lemongrass and annatto, wrapped in banana leaf with steamed rice, salted egg, and fresh tomatoes.</p>
             </div>
-          </div>
+          <?php endforeach; ?>
         </div>
 
-        <!-- ITEM 2: Pork Adobo Binalot -->
-        <div class="col-md-6 col-lg-4 menu-item-card" data-category="binalot">
-          <div class="menu-card">
-            <div class="menu-img-wrapper">
-              <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=600&q=80" class="menu-img" alt="Pork Adobo Binalot">
-            </div>
-            <div class="card-body p-4">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <h5 class="card-title fw-bold mb-0">Pork Adobo Binalot</h5>
-                <span class="menu-price">₱175</span>
-              </div>
-              <span class="badge badge-special text-white mb-2">Chef's Special</span>
-              <p class="card-text text-muted small">Tender pork belly simmered in soy sauce, vinegar, and garlic flakes, wrapped in banana leaf with rice and pickled papaya (*atsara*).</p>
-            </div>
-          </div>
+        <div id="menu-empty-state" class="text-center py-5 text-muted" style="display: none;">
+          <p class="mb-0">No available menu items in this category right now.</p>
         </div>
-
-        <!-- ITEM 3: Lechon Kawali Binalot -->
-        <div class="col-md-6 col-lg-4 menu-item-card" data-category="binalot">
-          <div class="menu-card">
-            <div class="menu-img-wrapper">
-              <img src="https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80" class="menu-img" alt="Crispy Lechon Kawali">
-            </div>
-            <div class="card-body p-4">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <h5 class="card-title fw-bold mb-0">Crispy Lechon Kawali</h5>
-                <span class="menu-price">₱195</span>
-              </div>
-              <span class="badge badge-special text-white mb-2">Popular</span>
-              <p class="card-text text-muted small">Deep-fried golden pork belly with extra crispy skin, served with homemade liver sauce, steamed rice, and salted egg in a banana leaf.</p>
-            </div>
-          </div>
+      <?php else : ?>
+        <div id="menu-empty-state" class="text-center py-5 text-muted">
+          <p class="mb-0">No menu items are currently available. Please check back soon.</p>
         </div>
-
-        <!-- ITEM 4: Sinigang na Baboy -->
-        <div class="col-md-6 col-lg-4 menu-item-card" data-category="sabaw">
-          <div class="menu-card">
-            <div class="menu-img-wrapper">
-              <img src="https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=600&q=80" class="menu-img" alt="Sinigang na Baboy">
-            </div>
-            <div class="card-body p-4">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <h5 class="card-title fw-bold mb-0">Sinigang na Baboy</h5>
-                <span class="menu-price">₱280</span>
-              </div>
-              <p class="card-text text-muted small">Traditional Filipino sour tamarind broth loaded with tender pork, water spinach, radish, taro, and fresh vegetables.</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- ITEM 5: Special Halo-Halo -->
-        <div class="col-md-6 col-lg-4 menu-item-card" data-category="merienda">
-          <div class="menu-card">
-            <div class="menu-img-wrapper">
-              <img src="https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=600&q=80" class="menu-img" alt="Special Bukid Halo-Halo">
-            </div>
-            <div class="card-body p-4">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <h5 class="card-title fw-bold mb-0">Special Bukid Halo-Halo</h5>
-                <span class="menu-price">₱120</span>
-              </div>
-              <span class="badge badge-leaf text-white mb-2">Dessert</span>
-              <p class="card-text text-muted small">Refreshing shaved ice dessert topped with creamy leche flan, ube halaya, sweetened banana, coconut gel, milk, and toasted pinipig.</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- ITEM 6: Sago't Gulaman -->
-        <div class="col-md-6 col-lg-4 menu-item-card" data-category="merienda">
-          <div class="menu-card">
-            <div class="menu-img-wrapper">
-              <img src="https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=600&q=80" class="menu-img" alt="Cold Sago't Gulaman">
-            </div>
-            <div class="card-body p-4">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <h5 class="card-title fw-bold mb-0">Cold Sago't Gulaman</h5>
-                <span class="menu-price">₱60</span>
-              </div>
-              <p class="card-text text-muted small">Classic Filipino beverage prepared with brown sugar syrup (*arnibal*), tapioca pearls, grass jelly cubes, and shaved ice.</p>
-            </div>
-          </div>
-        </div>
-
-      </div><!-- End Menu Container -->
+      <?php endif; ?>
     </div>
   </section>
 

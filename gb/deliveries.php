@@ -40,57 +40,13 @@
         </div>
       </div>
 
-      <div class="table-card p-3 mb-3">
-        <div class="row g-2 align-items-end">
-          <div class="col-md-3">
-            <label class="form-label small text-muted mb-1">Search</label>
-            <input type="text" class="form-control form-control-sm" placeholder="Order ID / customer">
-          </div>
-
-          <div class="col-md-2">
-            <label class="form-label small text-muted mb-1">Date</label>
-            <input type="date" class="form-control form-control-sm">
-          </div>
-
-          <div class="col-md-2">
-            <label class="form-label small text-muted mb-1">Status</label>
-            <select class="form-select form-select-sm">
-              <option selected>All</option>
-              <option>Pending Dispatch</option>
-              <option>Assigned</option>
-              <option>Picked Up</option>
-              <option>Out for Delivery</option>
-              <option>Delivered</option>
-              <option>Cancelled</option>
-            </select>
-          </div>
-
-          <div class="col-md-2">
-            <label class="form-label small text-muted mb-1">Rider</label>
-            <select class="form-select form-select-sm">
-              <option selected>All</option>
-              <option>Rider A</option>
-              <option>Rider B</option>
-              <option>Rider C</option>
-            </select>
-          </div>
-
-          <div class="col-md-3">
-            <div class="d-flex gap-2">
-              <button class="btn btn-success btn-sm w-100">Filter</button>
-              <button class="btn btn-outline-secondary btn-sm">Reset</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div class="table-card p-3">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <h4 class="fw-bold text-success mb-0">Delivery Orders</h4>
         </div>
 
         <div class="table-responsive">
-          <table class="table table-hover align-middle table-sm mb-0">
+          <table class="table table-hover align-middle table-sm mb-0 datatable-table">
             <thead class="table-light">
               <tr>
                 <th>Order ID</th>
