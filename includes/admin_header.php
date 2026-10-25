@@ -41,9 +41,26 @@ $pageTitle = $pageTitleMap[$currentPage] ?? 'GoBinalot';
 
   <link rel="icon" type="image/png" href="../img/logo.jpg">   
 
-   <link rel="stylesheet" href="../css/style.css">
+  <!-- DataTables CSS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/2.1.8/css/dataTables.bootstrap5.min.css">
+
+  <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
+
+  <?php if (isset($_SESSION['toast'])): ?>
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+      <div class="toast align-items-center text-bg-<?= $_SESSION['toast']['type'] === 'success' ? 'success' : 'danger'; ?> border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+          <div class="toast-body">
+            <?= htmlspecialchars($_SESSION['toast']['message']); ?>
+          </div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+      </div>
+    </div>
+    <?php unset($_SESSION['toast']); ?>
+  <?php endif; ?>
 
   <header class="topbar">
     <div class="d-flex align-items-center gap-3">
@@ -74,16 +91,28 @@ $pageTitle = $pageTitleMap[$currentPage] ?? 'GoBinalot';
       <div class="dropdown">
         <a href="#" class="d-flex align-items-center gap-2 text-decoration-none dropdown-toggle" data-bs-toggle="dropdown">
           <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="Admin Avatar" class="rounded-circle" style="width: 38px; height: 38px; object-fit: cover;">
-          <span class="fw-semibold small text-dark d-none d-lg-inline"><?php echo $_SESSION['user_data']['name']; ?></span>
+          <span class="fw-semibold small text-dark d-none d-lg-inline"><?= $_SESSION['user_data']['first_name'] . ' ' . $_SESSION['user_data']['last_name']; ?></span>
         </a>
         <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2">
           <li><a class="dropdown-item small" href="profile.php"><i class="fa-regular fa-user me-2"></i>Profile</a></li>
           <li><a class="dropdown-item small" href="settings.php"><i class="fa-solid fa-sliders me-2"></i>Settings</a></li>
           <li><hr class="dropdown-divider"></li>
-          <li><a class="dropdown-item small text-danger" onclick="return confirm('Are you sure you want to logout?');" href="../logout.php"><i class="fa-solid fa-right-from-bracket me-2"></i>Logout</a></li>
+          <li><a class="dropdown-item small text-danger logout-confirm" href="../logout.php"><i class="fa-solid fa-right-from-bracket me-2"></i>Logout</a></li>
         </ul>
       </div>
     </div>
   </header>
 
 <?php include('sidebar.php'); ?>
+
+  <!-- Bootstrap 5 JS Bundle with Popper -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Custom Script to Auto-Show Toasts -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const toastElList = document.querySelectorAll('.toast');
+      const toastList = [...toastElList].map(toastEl => new bootstrap.Toast(toastEl));
+      toastList.forEach(toast => toast.show());
+    });
+  </script>
