@@ -192,11 +192,12 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'login') {
 if (isset($_POST['form_type']) && $_POST['form_type'] === 'add_category') {
 
     $categoryName = trim($_POST['category_name'] ?? '');
-    $status = !empty($_POST['status']) ? 'active' : 'inactive';
+    $status = normalizeCategoryStatusValue($_POST['status'] ?? 0);
     $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $statusColumn = categoryStatusColumnName();
     
     try {
-        $query = "INSERT INTO categories (name, status) VALUES (:name, :status)";
+        $query = "INSERT INTO categories (name, " . $statusColumn . ") VALUES (:name, :status)";
         $statement = $conn->prepare($query);
         $data = [
             ':name' => $categoryName,
@@ -268,8 +269,9 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'edit_category') {
 
     $categoryId = trim($_POST['category_id'] ?? '');
     $categoryName = trim($_POST['category_name'] ?? '');
-    $status = !empty($_POST['status']) ? 'active' : 'inactive';
+    $status = normalizeCategoryStatusValue($_POST['status'] ?? 0);
     $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $statusColumn = categoryStatusColumnName();
 
     if (!$categoryId || !$categoryName) {
         if ($isAjax) {
@@ -283,7 +285,7 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'edit_category') {
     }
 
     try {
-        $query = "UPDATE categories SET name = :name, status = :status WHERE id = :id";
+        $query = "UPDATE categories SET name = :name, " . $statusColumn . " = :status WHERE id = :id";
         $statement = $conn->prepare($query);
         $data = [
             ':name' => $categoryName,
@@ -442,7 +444,7 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'add_menu_item') {
     $categoryId = isset($_POST['category_id']) ? (int) $_POST['category_id'] : 0;
     $price = isset($_POST['price']) ? (float) $_POST['price'] : 0;
     $description = trim($_POST['description'] ?? '');
-    $isAvailable = !empty($_POST['is_available']) ? 'Y' : 'N';
+    $isAvailable = !empty($_POST['is_available']) ? 1 : 0;
     $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
 
     $imageFileName = null;
@@ -533,7 +535,7 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'edit_menu_item') {
     $categoryId = isset($_POST['category_id']) ? (int) $_POST['category_id'] : 0;
     $price = isset($_POST['price']) ? (float) $_POST['price'] : 0;
     $description = trim($_POST['description'] ?? '');
-    $isAvailable = !empty($_POST['is_available']) ? 'Y' : 'N';
+    $isAvailable = !empty($_POST['is_available']) ? 1 : 0;
     $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
 
     $imageFileName = null;
@@ -658,79 +660,14 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'edit_menu_item') {
     }
 }
 
-// Delete Menu Item
-if (isset($_POST['form_type']) && $_POST['form_type'] === 'delete_menu_item') {
-
-    $menuId = isset($_POST['menu_id']) ? (int) $_POST['menu_id'] : 0;
-    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
-
-    if (!$menuId) {
-        if ($isAjax) {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'message' => 'Menu item ID is required.']);
-            exit;
-        }
-
-        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid menu item data.'];
-        header("Location: ../gb/menus.php#menu-items-tab-pane");
-        exit;
-    }
-
-    try {
-        $query = "DELETE FROM menu_items WHERE id = :id";
-        $statement = $conn->prepare($query);
-
-        $currentImageStmt = $conn->prepare("SELECT image FROM menu_items WHERE id = :id");
-        $currentImageStmt->execute([':id' => $menuId]);
-        $currentImage = $currentImageStmt->fetch(PDO::FETCH_ASSOC);
-
-        $result = $statement->execute([':id' => $menuId]);
-
-        if ($result) {
-            cleanupMenuImageIfUnused($menuId, $currentImage['image'] ?? null);
-
-            if ($isAjax) {
-                header('Content-Type: application/json');
-                echo json_encode(['success' => true, 'message' => 'Menu item deleted successfully!']);
-                exit;
-            }
-
-            $_SESSION['toast'] = ['type' => 'success', 'message' => 'Menu item deleted successfully!'];
-            header("Location: ../gb/menus.php#menu-items-tab-pane");
-            exit;
-        }
-
-        if ($isAjax) {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'message' => 'Failed to delete menu item.']);
-            exit;
-        }
-
-        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Failed to delete menu item.'];
-        header("Location: ../gb/menus.php#menu-items-tab-pane");
-        exit;
-
-    } catch (\PDOException $e) {
-        if ($isAjax) {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'message' => 'Something went wrong while deleting the menu item.']);
-            exit;
-        }
-
-        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while deleting the menu item.'];
-        header("Location: ../gb/menus.php#menu-items-tab-pane");
-        exit;
-    }
-}
-
 // Get menu stats
 if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_menu_stats') {
     $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
 
     try {
         $totalItems = (int) $conn->query("SELECT COUNT(*) FROM menu_items")->fetchColumn();
-        $availableItems = (int) $conn->query("SELECT COUNT(*) FROM menu_items WHERE is_available = 'Y'")->fetchColumn();
-        $unavailableItems = (int) $conn->query("SELECT COUNT(*) FROM menu_items WHERE is_available = 'N'")->fetchColumn();
+        $availableItems = (int) $conn->query("SELECT COUNT(*) FROM menu_items WHERE is_available = 1")->fetchColumn();
+        $unavailableItems = (int) $conn->query("SELECT COUNT(*) FROM menu_items WHERE is_available = 0")->fetchColumn();
         $categoryCount = (int) $conn->query("SELECT COUNT(*) FROM categories")->fetchColumn();
 
         if ($isAjax) {
@@ -738,29 +675,20 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_menu_stats') {
             echo json_encode([
                 'success' => true,
                 'stats' => [
-                    'total_items' => $totalItems,
-                    'available_items' => $availableItems,
-                    'unavailable_items' => $unavailableItems,
+                    'total' => $totalItems,
+                    'available' => $availableItems,
+                    'unavailable' => $unavailableItems,
                     'categories' => $categoryCount
                 ]
             ]);
             exit;
         }
-
-        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid stats request.'];
-        header("Location: ../gb/menus.php#menu-items-tab-pane");
-        exit;
-
     } catch (\PDOException $e) {
         if ($isAjax) {
             header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'message' => 'Something went wrong while fetching menu stats.']);
+            echo json_encode(['success' => false, 'message' => 'Unable to load menu stats.']);
             exit;
         }
-
-        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while fetching menu stats.'];
-        header("Location: ../gb/menus.php#menu-items-tab-pane");
-        exit;
     }
 }
 
@@ -799,4 +727,371 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_categories') {
         exit;
     }
 }
-?>
+
+function getCurrentUserId()
+{
+    return isset($_SESSION['user_data']['id']) ? (int) $_SESSION['user_data']['id'] : 0;
+}
+
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_addresses') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'User not logged in.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Please log in to manage addresses.'];
+        header('Location: ../login.php');
+        exit;
+    }
+
+    try {
+        $query = "SELECT id, type, address, contact_number, is_default
+                  FROM addresses
+                  WHERE user_id = :user_id
+                  ORDER BY is_default DESC, id DESC";
+        $statement = $conn->prepare($query);
+        $statement->execute([':user_id' => $userId]);
+        $addresses = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'addresses' => $addresses
+            ]);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid address request.'];
+        header("Location: ../gb/settings.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while loading addresses.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while loading addresses.'];
+        header("Location: ../gb/settings.php");
+        exit;
+    }
+}
+
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'add_address') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'User not logged in.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Please log in to add an address.'];
+        header('Location: ../login.php');
+        exit;
+    }
+
+    $addressType = trim($_POST['type'] ?? 'Home');
+    $address = trim($_POST['address'] ?? '');
+    $contactNumber = trim($_POST['contact_number'] ?? '');
+    $isDefault = !empty($_POST['is_default']);
+
+    if ($address === '' || $contactNumber === '') {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Address and contact number are required.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Address and contact number are required.'];
+        header("Location: ../gb/settings.php");
+        exit;
+    }
+
+    try {
+        if ($isDefault) {
+            $conn->prepare("UPDATE addresses SET is_default = 0 WHERE user_id = :user_id")
+                ->execute([':user_id' => $userId]);
+        }
+
+        $query = "INSERT INTO addresses (user_id, type, address, contact_number, is_default)
+                  VALUES (:user_id, :type, :address, :contact_number, :is_default)";
+        $statement = $conn->prepare($query);
+        $result = $statement->execute([
+            ':user_id' => $userId,
+            ':type' => $addressType,
+            ':address' => $address,
+            ':contact_number' => $contactNumber,
+            ':is_default' => $isDefault ? 1 : 0,
+        ]);
+
+        if ($result) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Address added successfully!',
+                    'address' => [
+                        'id' => $conn->lastInsertId(),
+                        'type' => $addressType,
+                        'address' => $address,
+                        'contact_number' => $contactNumber,
+                        'is_default' => $isDefault ? 1 : 0,
+                    ]
+                ]);
+                exit;
+            }
+
+            $_SESSION['toast'] = ['type' => 'success', 'message' => 'Address added successfully!'];
+            header("Location: ../gb/settings.php");
+            exit;
+        }
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Failed to add address.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Failed to add address.'];
+        header("Location: ../gb/settings.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while saving the address.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while saving the address.'];
+        header("Location: ../gb/settings.php");
+        exit;
+    }
+}
+
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'edit_address') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+    $addressId = isset($_POST['address_id']) ? (int) $_POST['address_id'] : 0;
+
+    if (!$userId || !$addressId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Invalid address data.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid address data.'];
+        header("Location: ../gb/settings.php");
+        exit;
+    }
+
+    $addressType = trim($_POST['type'] ?? 'Home');
+    $address = trim($_POST['address'] ?? '');
+    $contactNumber = trim($_POST['contact_number'] ?? '');
+    $isDefault = !empty($_POST['is_default']);
+
+    if ($address === '' || $contactNumber === '') {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Address and contact number are required.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Address and contact number are required.'];
+        header("Location: ../gb/settings.php");
+        exit;
+    }
+
+    try {
+        if ($isDefault) {
+            $conn->prepare("UPDATE addresses SET is_default = 0 WHERE user_id = :user_id")
+                ->execute([':user_id' => $userId]);
+        }
+
+        $query = "UPDATE addresses
+                  SET type = :type,
+                      address = :address,
+                      contact_number = :contact_number,
+                      is_default = :is_default
+                  WHERE id = :id AND user_id = :user_id";
+
+        $statement = $conn->prepare($query);
+        $result = $statement->execute([
+            ':type' => $addressType,
+            ':address' => $address,
+            ':contact_number' => $contactNumber,
+            ':is_default' => $isDefault ? 1 : 0,
+            ':id' => $addressId,
+            ':user_id' => $userId,
+        ]);
+
+        if ($result) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Address updated successfully!',
+                    'address' => [
+                        'id' => $addressId,
+                        'type' => $addressType,
+                        'address' => $address,
+                        'contact_number' => $contactNumber,
+                        'is_default' => $isDefault ? 1 : 0,
+                    ]
+                ]);
+                exit;
+            }
+
+            $_SESSION['toast'] = ['type' => 'success', 'message' => 'Address updated successfully!'];
+            header("Location: ../gb/settings.php");
+            exit;
+        }
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Failed to update address.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Failed to update address.'];
+        header("Location: ../gb/settings.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while updating the address.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while updating the address.'];
+        header("Location: ../gb/settings.php");
+        exit;
+    }
+}
+
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'delete_address') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+    $addressId = isset($_POST['address_id']) ? (int) $_POST['address_id'] : 0;
+
+    if (!$userId || !$addressId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Invalid address ID.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid address data.'];
+        header("Location: ../gb/settings.php");
+        exit;
+    }
+
+    try {
+        $current = $conn->prepare("SELECT is_default FROM addresses WHERE id = :id AND user_id = :user_id");
+        $current->execute([':id' => $addressId, ':user_id' => $userId]);
+        $row = $current->fetch(PDO::FETCH_ASSOC);
+
+        $deleteStmt = $conn->prepare("DELETE FROM addresses WHERE id = :id AND user_id = :user_id");
+        $result = $deleteStmt->execute([
+            ':id' => $addressId,
+            ':user_id' => $userId,
+        ]);
+
+        if ($result) {
+            if (!empty($row['is_default'])) {
+                $fallbackStmt = $conn->prepare("SELECT id FROM addresses WHERE user_id = :user_id ORDER BY id DESC LIMIT 1");
+                $fallbackStmt->execute([':user_id' => $userId]);
+                $fallback = $fallbackStmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($fallback) {
+                    $conn->prepare("UPDATE addresses SET is_default = 1 WHERE id = :id AND user_id = :user_id")
+                        ->execute([':id' => $fallback['id'], ':user_id' => $userId]);
+                }
+            }
+
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => true, 'message' => 'Address deleted successfully!']);
+                exit;
+            }
+
+            $_SESSION['toast'] = ['type' => 'success', 'message' => 'Address deleted successfully!'];
+            header("Location: ../gb/settings.php");
+            exit;
+        }
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Failed to delete address.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Failed to delete address.'];
+        header("Location: ../gb/settings.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while deleting the address.']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while deleting the address.'];
+        header("Location: ../gb/settings.php");
+        exit;
+    }
+}
+
+function tableHasColumn($tableName, $columnName)
+{
+    global $conn;
+
+    if (!$conn instanceof PDO) {
+        return false;
+    }
+
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = :table_name AND column_name = :column_name");
+    $stmt->execute([
+        ':table_name' => $tableName,
+        ':column_name' => $columnName,
+    ]);
+
+    return (int) $stmt->fetchColumn() > 0;
+}
+
+function normalizeCategoryStatusValue($value)
+{
+    $normalized = is_string($value) ? trim(strtolower($value)) : $value;
+
+    if (is_bool($normalized)) {
+        return $normalized ? 1 : 0;
+    }
+
+    if (is_int($normalized) || is_float($normalized)) {
+        return ((int) $normalized) === 1 ? 1 : 0;
+    }
+
+    if (is_string($normalized)) {
+        return in_array($normalized, ['1', 'y', 'yes', 'true', 'active', 'enabled'], true) ? 1 : 0;
+    }
+
+    return 0;
+}
+
+function categoryStatusColumnName()
+{
+    return 'status';
+}
