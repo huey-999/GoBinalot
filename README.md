@@ -11,10 +11,22 @@ This project is currently a working prototype with a usable front-end, PHP page 
 - Session-based authentication and redirection
 - Admin/customer role-based page routing
 - Dashboard, menu, order, report, and settings screens
-- Bootstrap + custom styling and basic JavaScript interactions
-- Menu/category management actions tied to PHP processing logic
+- Bootstrap 5 + custom styling and basic JavaScript interactions
+- Menu/category/address management actions tied to PHP processing logic
+- Customer cart, checkout summary, and saved-address flow
 
 The app is not yet a full production-ready business system, but the foundation is in place for continued backend development.
+
+## Recent fixes (customer ordering flow)
+
+- Fixed missing closing braces in `css/style.css` and `js/script.js` that broke parsing.
+- Fixed PHP syntax error in `gb/binalot_menus.php`.
+- Category filter pills and search bar now filter menu items by category/name/description.
+- Empty-state message centers correctly when all items are filtered out.
+- Checkout summary shows an itemized list (names, quantities, subtotals) and updates `Items` count correctly.
+- "Proceed to Checkout" button is visually disabled and does not open the modal when the cart is empty; modal "Place Order" button is also disabled when empty.
+- Checkout modal customer name shows first + last name as printed text instead of an editable input field.
+- "Default" saved-address badge styling is confined to the badge span only.
 
 ## What is working
 
@@ -25,43 +37,36 @@ The app is not yet a full production-ready business system, but the foundation i
 - Admin screens exist under `gb/` and use a shared header/sidebar structure
 - Category and menu item CRUD logic is present in `includes/actions.php`
 - Menu image upload handling is implemented with validation and deduplication checks
+- Customer cart, checkout, and saved-addresses flow functional
 
 ## What still needs cleanup before the app is considered complete
 
-After a final review of the current codebase, these are the remaining issues to fix or standardize:
-
 ### 1. Database setup needs to be formalized
-
 - The project still relies on a manually created MySQL database named `gobinalot`
 - There is no migration or schema file in the repository yet
-- Table structure for `users`, `menu_items`, `categories`, `orders`, `payments`, and `deliveries` should be documented and versioned
+- Table structure for `users`, `menu_items`, `categories`, `orders`, `payments`, `addresses`, and `deliveries` should be documented and versioned
 
 ### 2. Auth and authorization are still basic
-
 - Login and registration work at a functional level, but role enforcement is still minimal
 - Access checks exist, but they are not yet centrally enforced across all protected pages
 - Session hardening should be improved before production use
 
 ### 3. Demo/static data still exists in some modules
-
 - Several admin pages are UI-focused and still resemble placeholders rather than fully connected workflow screens
 - Some content and business actions still assume data exists without graceful fallback handling
 - Payment, orders, and delivery pages should be verified for real workflow logic rather than mock/demo behavior
 
 ### 4. Error handling should be more consistent
-
 - Database connection errors are printed directly in `includes/config.php`
 - Some actions fail with generic messages, but there is no centralized logging or error layer
 - Invalid form submissions and edge cases should be consistently validated and reported
 
 ### 5. File upload and media handling needs stricter review
-
-- Image uploads are present and generally validated
+- Image uploads are present and generally validated (mime type + SHA-1 dedup)
 - Uploaded files should be further restricted to approved directories and naming conventions
 - Unused images cleanup is implemented, but global validation and file security should be checked across admin flows
 
 ### 6. Testing and validation are still missing
-
 - No automated tests are present for auth, menu updates, category management, or order processing
 - The app should be verified against a clean database setup before release
 
@@ -81,6 +86,7 @@ After a final review of the current codebase, these are the remaining issues to 
 ```text
 GoBinalot/
 ├── gb/
+│   ├── binalot_menus.php
 │   ├── dashboard.php
 │   ├── deliveries.php
 │   ├── menus.php
@@ -89,8 +95,7 @@ GoBinalot/
 │   ├── payments.php
 │   ├── profile.php
 │   ├── reports.php
-│   ├── settings.php
-│   └── binalot_menus.php
+│   └── settings.php
 ├── css/
 │   └── style.css
 ├── img/
@@ -105,6 +110,7 @@ GoBinalot/
 │   ├── header.php
 │   └── sidebar.php
 ├── js/
+│   ├── action.js
 │   └── script.js
 ├── index.php
 ├── login.php
@@ -130,6 +136,7 @@ GoBinalot/
    - `orders`
    - `payments`
    - `deliveries`
+   - `addresses`
 6. Start the app in a browser:
    - `http://localhost/GoBinalot/`
 

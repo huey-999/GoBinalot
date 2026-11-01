@@ -4,7 +4,7 @@
 $activeCategories = $conn->query(
     "SELECT id, name, status
      FROM categories
-     WHERE status = 'active'
+     WHERE status = 1
      ORDER BY name ASC"
 )->fetchAll(PDO::FETCH_ASSOC);
 
@@ -12,8 +12,8 @@ $menuItems = $conn->query(
     "SELECT m.*, c.name AS category_name
      FROM menu_items m
      LEFT JOIN categories c ON c.id = m.category_id
-     WHERE m.is_available = 'Y'
-       AND c.status = 'active'
+     WHERE m.is_available = 1
+       AND c.status = 1
      ORDER BY c.name ASC"
 )->fetchAll(PDO::FETCH_ASSOC);
 

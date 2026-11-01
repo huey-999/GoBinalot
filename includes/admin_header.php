@@ -111,7 +111,7 @@ $pageTitle = $pageTitleMap[$currentPage] ?? 'GoBinalot';
   <!-- Custom Script to Auto-Show Toasts -->
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      const toastElList = document.querySelectorAll('.toast');
+      const toastElList = document.querySelectorAll('.toast[data-autoshow="true"]');
       const toastList = [...toastElList].map(toastEl => new bootstrap.Toast(toastEl));
       toastList.forEach(toast => toast.show());
     });

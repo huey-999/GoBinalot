@@ -37,7 +37,7 @@ $categoryOptions = $conn->query("SELECT id, name, status FROM categories ORDER B
 
         <div class="col-sm-6 col-xl-3">
           <div class="stat-card p-3">
-            <?php $count = $conn->query("SELECT count(*) FROM menu_items WHERE is_available = 'Y'")->fetchColumn(); ?>
+            <?php $count = $conn->query("SELECT count(*) FROM menu_items WHERE is_available = 1")->fetchColumn(); ?>
             <span class="text-muted small fw-semibold">Available</span>
             <h4 class="fw-bold text-dark mt-1 mb-0"><?= $count; ?></h4>
           </div>
@@ -45,7 +45,7 @@ $categoryOptions = $conn->query("SELECT id, name, status FROM categories ORDER B
 
         <div class="col-sm-6 col-xl-3">
           <div class="stat-card p-3">
-            <?php $count = $conn->query("SELECT count(*) FROM menu_items WHERE is_available = 'N'")->fetchColumn(); ?>
+            <?php $count = $conn->query("SELECT count(*) FROM menu_items WHERE is_available = 0")->fetchColumn(); ?>
             <span class="text-muted small fw-semibold">Unavailable</span>
             <h4 class="fw-bold text-dark mt-1 mb-0"><?= $count; ?></h4>
           </div>
@@ -117,7 +117,7 @@ $categoryOptions = $conn->query("SELECT id, name, status FROM categories ORDER B
                 <td>₱<?= number_format((float) $menu['price'], 2) ?></td>
                 <td class="text-muted small description-cell"><?= htmlspecialchars($menuDescription) ?></td>
                 <td>
-                  <?php if ($menu['is_available'] === 'Y') : ?>
+                  <?php if ((int) ($menu['is_available'] ?? 0) === 1) : ?>
                     <span class="badge bg-success">Available</span>
                   <?php else : ?>
                     <span class="badge bg-secondary">Unavailable</span>
@@ -127,14 +127,14 @@ $categoryOptions = $conn->query("SELECT id, name, status FROM categories ORDER B
                   <div class="d-flex flex-wrap gap-1">
                     <button type="button" class="btn btn-xs btn-outline-secondary btn-edit-menu-item"
                             data-menu-id="<?= (int) $menu['id'] ?>"
-                            data-menu-name="<?= $menu['name'] ?>"
+                            data-menu-name="<?= htmlspecialchars($menu['name'], ENT_QUOTES, 'UTF-8') ?>"
                             data-menu-category-id="<?= (int) ($menu['category_id'] ?? 0) ?>"
-                            data-menu-price="<?= (string) $menu['price'] ?>"
-                            data-menu-description="<?= $menu['description'] ?? '' ?>"
-                            data-menu-status="<?= $menu['is_available'] ?>"
-                            data-menu-image="<?= htmlspecialchars($menu['image'] ?? '') ?>"
+                            data-menu-price="<?= htmlspecialchars((string) $menu['price'], ENT_QUOTES, 'UTF-8') ?>"
+                            data-menu-description="<?= htmlspecialchars($menu['description'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                            data-menu-status="<?= ((int) ($menu['is_available'] ?? 0) === 1) ? 'Y' : 'N' ?>"
+                            data-menu-image="<?= htmlspecialchars($menu['image'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                             title="Edit"><i class="fa-solid fa-pen"></i></button>
-                    <button type="button" class="btn btn-xs btn-outline-danger btn-delete-menu-item" data-menu-id="<?= (int) $menu['id'] ?>" data-menu-name="<?= $menu['name'] ?>" title="Delete"><i class="fa-solid fa-trash"></i></button>
+                    <button type="button" class="btn btn-xs btn-outline-danger btn-delete-menu-item" data-menu-id="<?= (int) $menu['id'] ?>" data-menu-name="<?= htmlspecialchars($menu['name'], ENT_QUOTES, 'UTF-8') ?>" title="Delete"><i class="fa-solid fa-trash"></i></button>
                   </div>
                 </td>
               </tr>
@@ -221,12 +221,14 @@ $categoryOptions = $conn->query("SELECT id, name, status FROM categories ORDER B
                 $result = $statement->fetchAll();
 
                 if ($result) {
-                  foreach ($result as $category) {              
+                  foreach ($result as $category) {
+                    $statusValue = (int) ($category['status'] ?? 0);
+                    $isActive = $statusValue === 1;
               ?>
               <tr>
-                <td class="fw-bold"><?= $category['name'] ?></td>
+                <td class="fw-bold"><?= htmlspecialchars($category['name']) ?></td>
                 <td>
-                  <?php if($category['status'] === 'active') : ?>
+                  <?php if ($isActive) : ?>
                     <span class="badge bg-success">Active</span>
                   <?php else : ?>
                     <span class="badge bg-secondary">Inactive</span>
@@ -234,8 +236,8 @@ $categoryOptions = $conn->query("SELECT id, name, status FROM categories ORDER B
                 </td>
                 <td>
                   <div class="d-flex flex-wrap gap-1">
-                    <button class="btn btn-xs btn-outline-secondary btn-edit-category" data-category-id="<?= (int) $category['id'] ?>" data-category-name="<?= htmlspecialchars($category['name']) ?>" data-category-status="<?= htmlspecialchars($category['status']) ?>" title="Edit"><i class="fa-solid fa-pen"></i></button>
-                    <button class="btn btn-xs btn-outline-danger btn-delete-category" data-category-id="<?= (int) $category['id'] ?>" data-category-name="<?= htmlspecialchars($category['name']) ?>" title="Delete"><i class="fa-solid fa-trash"></i></button>
+                    <button class="btn btn-xs btn-outline-secondary btn-edit-category" data-category-id="<?= (int) $category['id'] ?>" data-category-name="<?= htmlspecialchars($category['name'], ENT_QUOTES, 'UTF-8') ?>" data-category-status="<?= $isActive ? '1' : '0' ?>" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-xs btn-outline-danger btn-delete-category" data-category-id="<?= (int) $category['id'] ?>" data-category-name="<?= htmlspecialchars($category['name'], ENT_QUOTES, 'UTF-8') ?>" title="Delete"><i class="fa-solid fa-trash"></i></button>
                   </div>
                 </td>
               </tr>
@@ -419,7 +421,7 @@ $categoryOptions = $conn->query("SELECT id, name, status FROM categories ORDER B
       </div>
 
       <div class="modal-body p-3">
-        <form>
+        <form id="addCategoryForm">
           <div class="mb-3">
             <label class="form-label small fw-semibold">Category Name</label>
             <input type="text" name="category_name" class="form-control form-control-sm" placeholder="e.g. Rice Meals, Grilled, Seafood" required>
@@ -450,7 +452,7 @@ $categoryOptions = $conn->query("SELECT id, name, status FROM categories ORDER B
       </div>
 
       <div class="modal-body p-3">
-        <form>
+        <form id="editCategoryForm">
           <input type="hidden" name="category_id">
           <div class="mb-3">
             <label class="form-label small fw-semibold">Category Name</label>
@@ -458,7 +460,7 @@ $categoryOptions = $conn->query("SELECT id, name, status FROM categories ORDER B
           </div>
 
           <div class="form-check form-switch mb-3">
-            <input class="form-check-input" name="status" type="checkbox" checked>
+            <input class="form-check-input" name="status" type="checkbox">
             <label class="form-check-label small">Active (visible to customers)</label>
           </div>
 
