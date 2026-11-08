@@ -534,7 +534,7 @@ if (typeof jQuery === 'undefined') {
       pendingDelete = null;
     });
 
-    function showToast(message, type) {
+    window.showToast = function showToast(message, type) {
       const toastClass = type === 'success' ? 'text-bg-success' : 'text-bg-danger';
       const toastHtml = `
         <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
@@ -806,6 +806,101 @@ if (typeof jQuery === 'undefined') {
       });
     });
 
-    loadSavedAddresses();
+    /* ==========================================================================
+       Order Placement & Status (checkout backend)
+       ========================================================================== */
+    window.__gobinalotDebug = window.__gobinalotDebug || {};
+    window.__gobinalotDebug.actionReady = true;
+
+    window.placeOrder = function (cart, addressId, paymentMethod, orderType) {
+      const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+      const delivery = orderType === 0 ? 0 : (subtotal > 500 ? 0 : 49);
+      const total = subtotal + delivery;
+
+      $.ajax({
+        url: '../includes/actions.php',
+        type: 'POST',
+        dataType: 'json',
+        data: {
+          form_type: 'place_order',
+          items: JSON.stringify(cart),
+          address_id: addressId,
+          subtotal: subtotal,
+          delivery_fee: delivery,
+          total_amount: total,
+          order_type: orderType,
+        },
+        success: function (response) {
+          if (response && response.success) {
+            showToast(response.message || 'Order placed successfully!', 'success');
+
+            const modalEl = document.getElementById('checkoutModal');
+            if (modalEl && typeof bootstrap !== 'undefined') {
+              const modal = bootstrap.Modal.getInstance(modalEl);
+              if (modal) modal.hide();
+            }
+
+            cart.length = 0;
+            window.renderCart();
+
+            if (paymentMethod === 'gcash') {
+              const $gcashModal = $('#gcashPaymentModal');
+              if ($gcashModal.length) {
+                const orderNumber = response.order_number || ('#GB-' + String(response.order_id).padStart(6, '0'));
+                $gcashModal.find('#gcashOrderId').val(response.order_id);
+                $gcashModal.find('#gcashAmount').val(total);
+                $gcashModal.find('#gcashOrderNumber').text(orderNumber);
+                $gcashModal.find('#gcashAmountDisplay').text('₱' + total.toFixed(2));
+                $gcashModal.find('#gcashQrImage').attr('src', 'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(orderNumber) + '&size=300x300');
+                $gcashModal.find('#gcashReferenceNumber').val('').prop('disabled', false);
+                $gcashModal.find('#gcashReceipt').val('');
+                $gcashModal.find('#btnSubmitPayment').prop('disabled', true);
+
+                const gcashModal = new bootstrap.Modal(document.getElementById('gcashPaymentModal'));
+                gcashModal.show();
+                return;
+              }
+            }
+
+            setTimeout(function () {
+              window.location.href = '../gb/my_orders.php';
+            }, 1200);
+            return;
+          }
+
+          showToast(response.message || 'Failed to place order.', 'danger');
+        },
+        error: function () {
+          showToast('Something went wrong while placing the order.', 'danger');
+        }
+      });
+    };
+
+    window.updateOrderStatus = function (orderId, newStatus, remarks) {
+      $.ajax({
+        url: '../includes/actions.php',
+        type: 'POST',
+        dataType: 'json',
+        data: {
+          form_type: 'update_order_status',
+          order_id: orderId,
+          new_status: newStatus,
+          remarks: remarks,
+        },
+        success: function (response) {
+          if (response && response.success) {
+            showToast(response.message || 'Order status updated successfully!', 'success');
+            setTimeout(function () {
+              window.location.reload();
+            }, 800);
+            return;
+          }
+          showToast(response.message || 'Failed to update order status.', 'danger');
+        },
+        error: function () {
+          showToast('Something went wrong while updating the order status.', 'danger');
+        }
+      });
+    };
   });
 }

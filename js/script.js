@@ -115,6 +115,56 @@ document.addEventListener('DOMContentLoaded', function () {
   window.addEventListener('scroll', updateActiveNavOnScroll);
   updateActiveNavOnScroll(); // Trigger initial check on page load
 
+  // Cart element references (declared early so delivery/pickup init can call renderCart)
+  const cart = [];
+  const cartItemsContainer = document.getElementById('cartItems');
+  const subtotalValue = document.getElementById('subtotalValue');
+  const deliveryValue = document.getElementById('deliveryValue');
+  const totalValue = document.getElementById('totalValue');
+  const cartCount = document.getElementById('cartCount');
+  const toastEl = document.getElementById('addToCartToast');
+  const toastItemName = document.getElementById('toastItemName');
+
+  /* ==========================================================================
+     DELIVERY / PICKUP ORDER TYPE TOGGLE
+     ========================================================================== */
+  window.selectedOrderType = 'delivery';
+
+  const deliveryToggles = document.querySelectorAll('.delivery-toggle');
+  const deliveryToggleGroup = document.querySelector('.delivery-toggle-group');
+
+  function setOrderType(type) {
+    window.selectedOrderType = type;
+    const isPickup = type === 'pickup';
+    const orderTypeValue = isPickup ? 0 : 1;
+
+    deliveryToggles.forEach(function (btn) {
+      const isActive = btn.getAttribute('data-order-type') === type;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-checked', String(isActive));
+    });
+
+    const addressSection = document.getElementById('checkoutAddressSection');
+    const orderTypeInput = document.getElementById('checkoutOrderType');
+    if (addressSection) {
+      addressSection.style.display = isPickup ? 'none' : '';
+      addressSection.setAttribute('data-order-type', orderTypeValue);
+    }
+    if (orderTypeInput) orderTypeInput.value = orderTypeValue;
+
+    if (typeof renderCart === 'function') renderCart();
+  }
+
+  if (deliveryToggleGroup && deliveryToggles.length) {
+    setOrderType('delivery');
+
+    deliveryToggles.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setOrderType(this.getAttribute('data-order-type'));
+      });
+    });
+  }
+
   navLinks.forEach(function (link) {
     link.addEventListener('click', function (event) {
       const href = link.getAttribute('href');
@@ -604,15 +654,6 @@ document.addEventListener('DOMContentLoaded', function () {
   /* ==========================================================================
      5. CART FUNCTIONALITY (Binalot Menus Page)
      ========================================================================== */
-  const cart = [];
-  const cartItemsContainer = document.getElementById('cartItems');
-  const subtotalValue = document.getElementById('subtotalValue');
-  const deliveryValue = document.getElementById('deliveryValue');
-  const serviceValue = document.getElementById('serviceValue');
-  const totalValue = document.getElementById('totalValue');
-  const cartCount = document.getElementById('cartCount');
-  const toastEl = document.getElementById('addToCartToast');
-  const toastItemName = document.getElementById('toastItemName');
 
   function formatMoney(value) {
     return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(value);
@@ -628,25 +669,25 @@ document.addEventListener('DOMContentLoaded', function () {
   function renderCart() {
     if (!cartItemsContainer) return;
     const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-    const delivery = subtotal > 500 ? 0 : 49;
-    const serviceFee = subtotal > 0 ? 15 : 0;
-    const total = subtotal + delivery + serviceFee;
+    const delivery = window.selectedOrderType === 'pickup' ? 0 : (subtotal > 500 ? 0 : 49);
+    const total = subtotal + delivery;
     if (subtotalValue) subtotalValue.textContent = formatMoney(subtotal);
     if (deliveryValue) deliveryValue.textContent = formatMoney(delivery);
-    if (serviceValue) serviceValue.textContent = formatMoney(serviceFee);
     if (totalValue) totalValue.textContent = formatMoney(total);
     if (cartCount) cartCount.textContent = cart.reduce((sum, item) => sum + item.qty, 0);
     const checkoutItemsCount = document.getElementById('checkoutItemsCount');
+    const checkoutDeliveryLabel = document.getElementById('checkoutDeliveryLabel');
     const checkoutDelivery = document.getElementById('checkoutDelivery');
     const checkoutTotal = document.getElementById('checkoutTotal');
     const btnCheckout = document.getElementById('btnCheckout');
     const checkoutItemList = document.getElementById('checkoutItemList');
     if (checkoutItemsCount) checkoutItemsCount.textContent = cart.reduce((sum, item) => sum + item.qty, 0);
+    if (checkoutDeliveryLabel) checkoutDeliveryLabel.textContent = window.selectedOrderType === 'pickup' ? 'Pickup' : 'Delivery';
+    if (checkoutDelivery) checkoutDelivery.textContent = window.selectedOrderType === 'pickup' ? 'Free' : formatMoney(delivery);
+    if (checkoutTotal) checkoutTotal.textContent = formatMoney(total);
     if (checkoutItemList) {
       checkoutItemList.innerHTML = cart.map(item => `<div class="checkout-item-row"><span>${item.name} x${item.qty}</span><strong>${formatMoney(item.price*item.qty)}</strong></div>`).join('');
     }
-    if (checkoutDelivery) checkoutDelivery.textContent = formatMoney(delivery);
-    if (checkoutTotal) checkoutTotal.textContent = formatMoney(total);
     if (btnCheckout) {
       if (cart.length === 0) btnCheckout.setAttribute('disabled', 'disabled');
       else btnCheckout.removeAttribute('disabled');
@@ -658,9 +699,11 @@ document.addEventListener('DOMContentLoaded', function () {
     cartItemsContainer.innerHTML = cart.map(item => `<div class="cart-item" data-name="${item.name}"><div class="cart-item-thumb"><img src="${item.image}" alt="${item.name}" /></div><div class="cart-item-body"><div class="cart-item-head"><h4>${item.name}</h4><button type="button" class="remove-item" data-name="${item.name}">Remove</button></div><div class="cart-item-meta"><span>${formatMoney(item.price)} each</span><div class="mini-qty"><button type="button" data-action="minus" data-name="${item.name}">-</button><span>${item.qty}</span><button type="button" data-action="plus" data-name="${item.name}">+</button></div></div></div></div>`).join('');
   }
 
-  function addToCart(name, price, image, qty = 1) {
+  window.renderCart = renderCart;
+
+  function addToCart(name, price, image, qty = 1, menu_item_id = null) {
     const existingItem = cart.find(item => item.name === name);
-    if (existingItem) { existingItem.qty += qty; } else { cart.push({ name, price, image, qty }); }
+    if (existingItem) { existingItem.qty += qty; } else { cart.push({ name, price, image, qty, menu_item_id }); }
     renderCart();
     showAddedToast(name);
   }
@@ -735,9 +778,10 @@ document.addEventListener('DOMContentLoaded', function () {
       const name = this.getAttribute('data-name');
       const price = parseFloat(this.getAttribute('data-price'));
       const image = this.getAttribute('data-image');
+      const menuItemId = this.getAttribute('data-menu-item-id');
       const qtyEl = this.closest('.menu-order-card').querySelector('.qty-value');
       const qty = qtyEl ? parseInt(qtyEl.textContent, 10) || 1 : 1;
-      addToCart(name, price, image, qty);
+      addToCart(name, price, image, qty, menuItemId);
     });
   });
 
@@ -779,7 +823,38 @@ document.addEventListener('DOMContentLoaded', function () {
       if (cart.length === 0) {
         e.preventDefault();
         e.stopPropagation();
+        return;
       }
+
+      const addressId = document.getElementById('selectedAddressId')?.value || 0;
+      if (!addressId) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.showToast) {
+          window.showToast('Please select a delivery address before placing your order.', 'danger');
+        } else {
+          console.error('Checkout blocked: no delivery address selected.');
+          alert('Please select a delivery address before placing your order.');
+        }
+        return;
+      }
+
+      if (typeof window.placeOrder !== 'function') {
+        e.preventDefault();
+        e.stopPropagation();
+        console.error('Checkout blocked: window.placeOrder is not defined. Check if js/action.js is loaded.');
+
+        if (window.showToast) {
+          window.showToast('Order placement is unavailable right now. Please refresh the page and try again.', 'danger');
+        } else {
+          alert('Order placement is unavailable right now. Please refresh the page and try again.');
+        }
+        return;
+      }
+
+      e.preventDefault();
+      const orderType = window.selectedOrderType === 'pickup' ? 0 : 1;
+      window.placeOrder(cart, addressId, 'gcash', orderType);
     });
   }
 
@@ -791,10 +866,61 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     const hiddenId = document.getElementById('selectedAddressId');
     const hiddenText = document.getElementById('selectedAddressText');
-    const hiddenPhone = document.getElementById('selectedAddressPhone');
-    if (hiddenId) hiddenId.value = address.id;
-    if (hiddenText) hiddenText.value = address.address;
-    if (hiddenPhone) hiddenPhone.value = address.contact_number || '';
-  };
+      const hiddenPhone = document.getElementById('selectedAddressPhone');
+      if (hiddenId) hiddenId.value = address.id;
+      if (hiddenText) hiddenText.value = address.address;
+      if (hiddenPhone) hiddenPhone.value = address.contact_number || '';
+    };
 
+  // GCash payment form submit (shared across binalot_menus.php and my_orders.php)
+  (function () {
+    const $form = $('#gcashPaymentForm');
+    if (!$form.length) return;
+    const $ref = $form.find('[name="reference_number"]');
+    const $receipt = $form.find('[name="receipt"]');
+    const $submit = $('#btnSubmitPayment');
+
+    function toggleSubmit() {
+      $submit.prop('disabled', !($ref.val().trim() && $receipt[0].files.length));
+    }
+
+    $ref.on('input', toggleSubmit);
+    $receipt.on('change', toggleSubmit);
+
+    $form.on('submit', function (event) {
+      event.preventDefault();
+
+      const formData = new FormData(this);
+      formData.append('form_type', 'submit_payment');
+
+      $submit.prop('disabled', true).text('Submitting...');
+
+      $.ajax({
+        url: '../includes/actions.php',
+        type: 'POST',
+        dataType: 'json',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function (response) {
+          if (response && response.success) {
+            showToast(response.message || 'Payment receipt submitted. Awaiting verification.', 'success');
+            const modal = bootstrap.Modal.getInstance(document.getElementById('gcashPaymentModal'));
+            if (modal) modal.hide();
+            setTimeout(function () {
+              window.location.href = '../gb/my_orders.php';
+            }, 1000);
+            return;
+          }
+          showToast(response.message || 'Failed to submit payment.', 'danger');
+          $submit.prop('disabled', false).text('Submit Payment');
+        },
+        error: function () {
+          showToast('Something went wrong while submitting payment.', 'danger');
+          $submit.prop('disabled', false).text('Submit Payment');
+        }
+      });
+    });
+  })();
 });
+

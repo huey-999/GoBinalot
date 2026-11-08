@@ -62,7 +62,7 @@
             </thead>
             <tbody>
               <tr>
-                <td class="fw-bold">#ORD-1082</td>
+                <td class="fw-bold">#GB-1082</td>
                 <td>Maria Santos</td>
                 <td>Cebu City, Lahug</td>
                 <td>09171234567</td>
@@ -80,7 +80,7 @@
               </tr>
 
               <tr>
-                <td class="fw-bold">#ORD-1081</td>
+                <td class="fw-bold">#GB-1081</td>
                 <td>Juan Dela Cruz</td>
                 <td>Mandaue, Centro</td>
                 <td>09189876543</td>
@@ -98,7 +98,7 @@
               </tr>
 
               <tr>
-                <td class="fw-bold">#ORD-1078</td>
+                <td class="fw-bold">#GB-1078</td>
                 <td>Ana Reyes</td>
                 <td>Talamban, Cebu</td>
                 <td>09223344556</td>
@@ -126,7 +126,7 @@
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content border-0 shadow-sm">
       <div class="modal-header border-0 pb-2">
-        <h5 class="modal-title fw-bold text-success">Delivery Details #ORD-1082</h5>
+        <h5 class="modal-title fw-bold text-success">Delivery Details #GB-1082</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 

@@ -1055,6 +1055,788 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'delete_address') {
     }
 }
 
+// Place Order
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'place_order') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'User not logged in.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Please log in to place an order.'];
+        header('Location: ../login.php');
+        exit;
+    }
+
+    $itemsJson = $_POST['items'] ?? '[]';
+    $addressId = isset($_POST['address_id']) ? (int) $_POST['address_id'] : 0;
+    $subtotal = isset($_POST['subtotal']) ? (float) $_POST['subtotal'] : 0;
+    $deliveryFee = isset($_POST['delivery_fee']) ? (float) $_POST['delivery_fee'] : 0;
+    $totalAmount = isset($_POST['total_amount']) ? (float) $_POST['total_amount'] : 0;
+    $orderType = isset($_POST['order_type']) ? (int) $_POST['order_type'] : 1;
+
+    // For pickup, no address is required
+    if ($orderType === 0) {
+        $addressId = 0;
+    }
+
+    try {
+        $items = json_decode($itemsJson, true);
+        if (!is_array($items) || empty($items)) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Cart is empty.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Your cart is empty.'];
+            header("Location: ../gb/binalot_menus.php");
+            exit;
+        }
+
+        if ($orderType === 1 && !$addressId) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Delivery address is required.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Please select a delivery address.'];
+            header("Location: ../gb/binalot_menus.php");
+            exit;
+        }
+
+        if ($orderType === 1) {
+            // Verify address belongs to user
+            $addrCheck = $conn->prepare("SELECT id FROM addresses WHERE id = :id AND user_id = :user_id");
+            $addrCheck->execute([':id' => $addressId, ':user_id' => $userId]);
+            if (!$addrCheck->fetch(PDO::FETCH_ASSOC)) {
+                if ($isAjax) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['success' => false, 'message' => 'Invalid delivery address.']);
+                    exit;
+                }
+                $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid delivery address.'];
+                header("Location: ../gb/binalot_menus.php");
+                exit;
+            }
+        }
+
+        $conn->beginTransaction();
+
+        $orderStmt = $conn->prepare("INSERT INTO orders (user_id, address_id, subtotal, delivery_fee, total_amount, order_type, order_status, created_at)
+                                     VALUES (:user_id, :address_id, :subtotal, :delivery_fee, :total_amount, :order_type, 'Pending', NOW())");
+        $orderStmt->execute([
+            ':user_id' => $userId,
+            ':address_id' => $addressId,
+            ':subtotal' => $subtotal,
+            ':delivery_fee' => $deliveryFee,
+            ':total_amount' => $totalAmount,
+            ':order_type' => $orderType,
+        ]);
+        $orderId = (int) $conn->lastInsertId();
+
+        // Generate order_number: GB- + LPAD(id, 6, '0')
+        $orderNumStmt = $conn->prepare("UPDATE orders SET order_number = CONCAT('GB-', LPAD(:id, 6, '0')) WHERE id = :id");
+        $orderNumStmt->execute([':id' => $orderId]);
+        $orderNumber = 'GB-' . str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
+
+        // Insert order items
+        $itemStmt = $conn->prepare("INSERT INTO order_items (order_id, menu_item_id, item_name, unit_price, quantity, subtotal)
+                                    VALUES (:order_id, :menu_item_id, :item_name, :unit_price, :quantity, :subtotal)");
+        foreach ($items as $item) {
+            $itemQty = isset($item['qty']) ? (int) $item['qty'] : 1;
+            $itemPrice = isset($item['price']) ? (float) $item['price'] : 0;
+            $itemSubtotal = $itemPrice * $itemQty;
+            $itemStmt->execute([
+                ':order_id' => $orderId,
+                ':menu_item_id' => (isset($item['menu_item_id']) && $item['menu_item_id'] !== null && $item['menu_item_id'] !== '') ? (int) $item['menu_item_id'] : 0,
+                ':item_name' => $item['name'] ?? 'Menu Item',
+                ':unit_price' => $itemPrice,
+                ':quantity' => $itemQty,
+                ':subtotal' => $itemSubtotal,
+            ]);
+        }
+
+        // Insert order status history
+        $historyStmt = $conn->prepare("INSERT INTO order_status_history (order_id, old_status, new_status, changed_by, remarks, created_at)
+                                       VALUES (:order_id, :old_status, :new_status, :changed_by, :remarks, NOW())");
+        $historyStmt->execute([
+            ':order_id' => $orderId,
+            ':old_status' => '',
+            ':new_status' => 'Pending',
+            ':changed_by' => $userId,
+            ':remarks' => 'Order placed',
+        ]);
+
+        $conn->commit();
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'message' => 'Order placed successfully!',
+                'order_id' => $orderId,
+                'order_number' => $orderNumber,
+                'total_amount' => $totalAmount,
+            ]);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'success', 'message' => 'Order placed successfully!'];
+        header("Location: ../gb/my_orders.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        $conn->rollBack();
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while placing the order.'];
+        header("Location: ../gb/binalot_menus.php");
+        exit;
+    }
+}
+
+// Update Order Status
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'update_order_status') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'User not logged in.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Please log in.'];
+        header('Location: ../login.php');
+        exit;
+    }
+
+    $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
+    $newStatus = trim($_POST['new_status'] ?? '');
+    $remarks = trim($_POST['remarks'] ?? '');
+
+    if (!$orderId || !$newStatus) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Order ID and new status are required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid order status data.'];
+        header("Location: ../gb/orders.php");
+        exit;
+    }
+
+    try {
+        $current = $conn->prepare("SELECT order_status FROM orders WHERE id = :id");
+        $current->execute([':id' => $orderId]);
+        $row = $current->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Order not found.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Order not found.'];
+            header("Location: ../gb/orders.php");
+            exit;
+        }
+
+        $conn->beginTransaction();
+
+        $updateStmt = $conn->prepare("UPDATE orders SET order_status = :new_status WHERE id = :id");
+        $updateStmt->execute([
+            ':new_status' => $newStatus,
+            ':id' => $orderId,
+        ]);
+
+        $historyStmt = $conn->prepare("INSERT INTO order_status_history (order_id, old_status, new_status, changed_by, remarks, created_at)
+                                       VALUES (:order_id, :old_status, :new_status, :changed_by, :remarks, NOW())");
+        $historyStmt->execute([
+            ':order_id' => $orderId,
+            ':old_status' => $row['order_status'],
+            ':new_status' => $newStatus,
+            ':changed_by' => $userId,
+            ':remarks' => $remarks,
+        ]);
+
+        $conn->commit();
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => 'Order status updated successfully!']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'success', 'message' => 'Order status updated successfully!'];
+        header("Location: ../gb/orders.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        $conn->rollBack();
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while updating the order status.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while updating the order status.'];
+        header("Location: ../gb/orders.php");
+        exit;
+    }
+}
+
+// Get Orders
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_orders') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'User not logged in.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Please log in.'];
+        header('Location: ../login.php');
+        exit;
+    }
+
+    $filterStatus = $_POST['status'] ?? '';
+    $forUser = isset($_POST['for_user']) ? (bool) $_POST['for_user'] : false;
+
+    try {
+        $sql = "SELECT o.id, o.order_number, o.user_id, u.first_name, u.last_name, u.email,
+                       o.address_id, a.address, a.contact_number,
+                       o.subtotal, o.delivery_fee, o.total_amount,
+                       o.order_status, o.created_at,
+                       GROUP_CONCAT(CONCAT(oi.quantity, 'x ', oi.item_name) SEPARATOR ', ') as items_summary
+                FROM orders o
+                JOIN users u ON u.id = o.user_id
+                LEFT JOIN addresses a ON a.id = o.address_id
+                LEFT JOIN order_items oi ON oi.order_id = o.id
+                WHERE 1=1";
+        $params = [];
+
+        if ($forUser) {
+            $sql .= " AND o.user_id = :user_id";
+            $params[':user_id'] = $userId;
+        }
+
+        if ($filterStatus !== '') {
+            $sql .= " AND o.order_status = :status";
+            $params[':status'] = $filterStatus;
+        }
+
+        $sql .= " GROUP BY o.id";
+        $sql .= " ORDER BY o.created_at DESC";
+
+        $stmt = $conn->prepare($sql);
+        $stmt->execute($params);
+        $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'orders' => $orders,
+            ]);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid orders request.'];
+        header("Location: ../gb/orders.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while fetching orders.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while fetching orders.'];
+        header("Location: ../gb/orders.php");
+        exit;
+    }
+}
+
+// Get Order Items
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_order_items') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'User not logged in.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Please log in.'];
+        header('Location: ../login.php');
+        exit;
+    }
+
+    $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
+
+    if (!$orderId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Order ID is required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid order ID.'];
+        header("Location: ../gb/my_orders.php");
+        exit;
+    }
+
+    $userRole = $_SESSION['user_data']['role'] ?? 'customer';
+    $isAdmin = ($userRole === 'admin');
+
+    try {
+        if ($isAdmin) {
+            $stmt = $conn->prepare("
+                SELECT oi.item_name, oi.quantity, oi.unit_price, oi.subtotal
+                FROM order_items oi
+                WHERE oi.order_id = :order_id
+                ORDER BY oi.id
+            ");
+            $stmt->execute([':order_id' => $orderId]);
+        } else {
+            $stmt = $conn->prepare("
+                SELECT oi.item_name, oi.quantity, oi.unit_price, oi.subtotal
+                FROM order_items oi
+                JOIN orders o ON o.id = oi.order_id
+                WHERE oi.order_id = :order_id AND o.user_id = :user_id
+                ORDER BY oi.id
+            ");
+            $stmt->execute([
+                ':order_id' => $orderId,
+                ':user_id' => $userId,
+            ]);
+        }
+        $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'items' => $items,
+            ]);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid order items request.'];
+        header("Location: ../gb/my_orders.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while fetching order items.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while fetching order items.'];
+        header("Location: ../gb/my_orders.php");
+        exit;
+    }
+}
+
+// Submit Payment (customer uploads GCash receipt)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'submit_payment') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'User not logged in.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Please log in.'];
+        header('Location: ../login.php');
+        exit;
+    }
+
+    $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
+    $referenceNumber = trim($_POST['reference_number'] ?? '');
+    $amount = isset($_POST['amount']) ? (float) $_POST['amount'] : 0;
+
+    if (!$orderId || !$referenceNumber || $amount <= 0) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Order, reference number, and amount are required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid payment data.'];
+        header("Location: ../gb/my_orders.php");
+        exit;
+    }
+
+    // Verify order belongs to user and is pending payment
+    $orderCheck = $conn->prepare("SELECT id, total_amount, order_status FROM orders WHERE id = :id AND user_id = :user_id");
+    $orderCheck->execute([':id' => $orderId, ':user_id' => $userId]);
+    $order = $orderCheck->fetch(PDO::FETCH_ASSOC);
+
+    if (!$order) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Order not found.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Order not found.'];
+        header("Location: ../gb/my_orders.php");
+        exit;
+    }
+
+    if ($order['order_status'] !== 'Pending') {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Order is not pending payment.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Order is not pending payment.'];
+        header("Location: ../gb/my_orders.php");
+        exit;
+    }
+
+    // Handle receipt upload
+    $receiptPath = null;
+    if (isset($_FILES['receipt']) && $_FILES['receipt']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = __DIR__ . '/../img/payments';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+        $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+        $fileType = mime_content_type($_FILES['receipt']['tmp_name']);
+        if (!in_array($fileType, $allowedTypes, true)) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Only JPG, PNG, and WEBP images are allowed.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid receipt image type.'];
+            header("Location: ../gb/my_orders.php");
+            exit;
+        }
+        $extension = strtolower(pathinfo($_FILES['receipt']['name'], PATHINFO_EXTENSION)) ?: 'jpg';
+        $safeName = 'receipt_' . $orderId . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $extension;
+        $targetPath = $uploadDir . DIRECTORY_SEPARATOR . $safeName;
+        if (move_uploaded_file($_FILES['receipt']['tmp_name'], $targetPath)) {
+            $receiptPath = $safeName;
+        }
+    }
+
+    if (!$receiptPath) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Receipt image is required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Receipt image is required.'];
+        header("Location: ../gb/my_orders.php");
+        exit;
+    }
+
+    try {
+        $stmt = $conn->prepare("
+            INSERT INTO payments (order_id, method, amount, reference_number, receipt, payment_status, verified_by)
+            VALUES (:order_id, 'GCash', :amount, :reference_number, :receipt, 'pending', 0)
+        ");
+        $result = $stmt->execute([
+            ':order_id' => $orderId,
+            ':amount' => $amount,
+            ':reference_number' => $referenceNumber,
+            ':receipt' => $receiptPath,
+        ]);
+
+        if ($result) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Payment receipt submitted successfully. Awaiting admin verification.',
+                    'payment_id' => $conn->lastInsertId(),
+                ]);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'success', 'message' => 'Payment receipt submitted successfully.'];
+            header("Location: ../gb/my_orders.php");
+            exit;
+        }
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Failed to submit payment.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Failed to submit payment.'];
+        header("Location: ../gb/my_orders.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while submitting payment.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while submitting payment.'];
+        header("Location: ../gb/my_orders.php");
+        exit;
+    }
+}
+
+// Verify Payment (admin approves/rejects)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'verify_payment') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'User not logged in.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Please log in.'];
+        header('Location: ../login.php');
+        exit;
+    }
+
+    $paymentId = isset($_POST['payment_id']) ? (int) $_POST['payment_id'] : 0;
+    $newStatus = trim($_POST['payment_status'] ?? '');
+    $remarks = trim($_POST['remarks'] ?? '');
+
+    if (!$paymentId || !$newStatus || !in_array($newStatus, ['approved', 'rejected'], true)) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Invalid payment verification data.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid payment data.'];
+        header("Location: ../gb/payments.php");
+        exit;
+    }
+
+    try {
+        $conn->beginTransaction();
+
+        $payment = $conn->prepare("SELECT order_id FROM payments WHERE id = :id");
+        $payment->execute([':id' => $paymentId]);
+        $paymentRow = $payment->fetch(PDO::FETCH_ASSOC);
+
+        if (!$paymentRow) {
+            $conn->rollBack();
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Payment not found.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Payment not found.'];
+            header("Location: ../gb/payments.php");
+            exit;
+        }
+
+        $updateStmt = $conn->prepare("
+            UPDATE payments
+            SET payment_status = :status, verified_by = :verified_by, verified_at = NOW()
+            WHERE id = :id
+        ");
+        $updateStmt->execute([
+            ':status' => $newStatus,
+            ':verified_by' => $userId,
+            ':id' => $paymentId,
+        ]);
+
+        if ($newStatus === 'approved') {
+            $orderStmt = $conn->prepare("UPDATE orders SET order_status = 'Paid' WHERE id = :id");
+            $orderStmt->execute([':id' => $paymentRow['order_id']]);
+
+            $historyStmt = $conn->prepare("
+                INSERT INTO order_status_history (order_id, old_status, new_status, changed_by, remarks, created_at)
+                VALUES (:order_id, :old_status, :new_status, :changed_by, :remarks, NOW())
+            ");
+            $historyStmt->execute([
+                ':order_id' => $paymentRow['order_id'],
+                ':old_status' => 'Pending',
+                ':new_status' => 'Paid',
+                ':changed_by' => $userId,
+                ':remarks' => $remarks ?: 'Payment validated',
+            ]);
+        }
+
+        $conn->commit();
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => 'Payment ' . $newStatus . ' successfully!']);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'success', 'message' => 'Payment ' . $newStatus . ' successfully!'];
+        header("Location: ../gb/payments.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        $conn->rollBack();
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while verifying payment.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while verifying payment.'];
+        header("Location: ../gb/payments.php");
+        exit;
+    }
+}
+
+// Get Payments (admin list)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_payments') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'User not logged in.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Please log in.'];
+        header('Location: ../login.php');
+        exit;
+    }
+
+    try {
+        $sql = "
+            SELECT p.id, p.order_id, o.order_number, u.first_name, u.last_name,
+                   p.method, p.amount, p.reference_number, p.receipt, p.payment_status,
+                   p.verified_by, p.verified_at,
+                   v.first_name AS verified_first_name, v.last_name AS verified_last_name
+            FROM payments p
+            JOIN orders o ON o.id = p.order_id
+            JOIN users u ON u.id = o.user_id
+            LEFT JOIN users v ON v.id = p.verified_by
+            ORDER BY p.created_at DESC
+        ";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute();
+        $payments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'payments' => $payments,
+            ]);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid payments request.'];
+        header("Location: ../gb/payments.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while fetching payments.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while fetching payments.'];
+        header("Location: ../gb/payments.php");
+        exit;
+    }
+}
+
+// Get Order Payment (latest payment for an order, admin)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_order_payment') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'User not logged in.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Please log in.'];
+        header('Location: ../login.php');
+        exit;
+    }
+
+    $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
+
+    if (!$orderId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Order ID is required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid order ID.'];
+        header("Location: ../gb/orders.php");
+        exit;
+    }
+
+    $userRole = $_SESSION['user_data']['role'] ?? 'customer';
+    $isAdmin = ($userRole === 'admin');
+
+    try {
+        if ($isAdmin) {
+            $stmt = $conn->prepare("
+                SELECT pay.id, pay.order_id, pay.method, pay.amount, pay.reference_number, pay.receipt, pay.payment_status,
+                       pay.verified_by, pay.verified_at, pay.created_at,
+                       o.order_number, u.first_name, u.last_name
+                FROM payments pay
+                JOIN orders o ON o.id = pay.order_id
+                JOIN users u ON u.id = o.user_id
+                WHERE pay.order_id = :order_id
+                ORDER BY pay.id DESC
+                LIMIT 1
+            ");
+            $stmt->execute([':order_id' => $orderId]);
+        } else {
+            $stmt = $conn->prepare("
+                SELECT pay.id, pay.order_id, pay.method, pay.amount, pay.reference_number, pay.receipt, pay.payment_status,
+                       pay.verified_by, pay.verified_at, pay.created_at,
+                       o.order_number, u.first_name, u.last_name
+                FROM payments pay
+                JOIN orders o ON o.id = pay.order_id
+                JOIN users u ON u.id = o.user_id
+                WHERE pay.order_id = :order_id AND o.user_id = :user_id
+                ORDER BY pay.id DESC
+                LIMIT 1
+            ");
+            $stmt->execute([':order_id' => $orderId, ':user_id' => $userId]);
+        }
+        $payment = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'payment' => $payment ?: null,
+            ]);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid order payment request.'];
+        header("Location: ../gb/orders.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while fetching payment.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while fetching payment.'];
+        header("Location: ../gb/orders.php");
+        exit;
+    }
+}
+
 function tableHasColumn($tableName, $columnName)
 {
     global $conn;

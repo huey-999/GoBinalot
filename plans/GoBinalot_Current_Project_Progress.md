@@ -2,9 +2,9 @@
 
 ## Overall Assessment
 
-The project is moving in the right direction and is aligned with the original project plan in terms of architecture and general scope. However, it is still in the early-to-mid prototype stage rather than a complete end-to-end food ordering, payment verification, and delivery management system.
+The project has progressed from an early prototype to a functional mid-stage build. Core customer ordering, GCash payment submission, admin payment verification, and admin order management are now implemented end-to-end. Delivery management, notifications, reports, and security hardening remain outstanding.
 
-In short: the foundation is in place, but several core business workflows from the plan are still not fully implemented.
+In short: the ordering and payment-verification workflows are now functional, but delivery, reporting, and production hardening are still incomplete.
 
 ---
 
@@ -19,7 +19,7 @@ In short: the foundation is in place, but several core business workflows from t
 
 #### Still Missing / Not Finalized
 - Final restaurant business rules confirmation
-- Exact order acceptance and payment workflow
+- Exact order acceptance and payment workflow (GCash-only now decided)
 - Final delivery process and status rules
 - Final cancellation/refund policy
 - Formal SRS and acceptance criteria
@@ -93,7 +93,7 @@ The login system works as a basic prototype, but it is not yet fully aligned wit
 - Archive/soft-delete workflow
 - Historical menu data protection
 - More detailed category and item lifecycle rules
-- Menu item price snapshot handling in order records
+- Menu item price snapshot handling in order records (unit_price is snapshotted in order_items)
 
 ### Conclusion
 The menu management portion is one of the more developed features, but not yet complete according to the project requirements.
@@ -102,70 +102,78 @@ The menu management portion is one of the more developed features, but not yet c
 
 ## 5. Customer Ordering Workflow Status
 
-### Status: Not Fully Implemented
+### Status: Implemented (customer-facing)
 
 #### Included
 - Public menu browsing is available
-- Customer-facing app layout exists
+- Customer cart with quantity controls and live subtotal/delivery/total
+- Checkout modal with saved-address selection and order type (Delivery/Pickup)
+- Order submission via `place_order` (server-side total, order item snapshots, order status history)
+- Unique order reference numbers (`GB-XXXXXX`)
+- `order_type` persisted (0 = Pickup, 1 = Delivery); delivery fee = 0 for Pickup
+- Customer order tracking page (`gb/my_orders.php`) with real data from DB
+- View-order modal with subtotal, delivery fee, total, items, and progress timeline
+- GCash payment modal with QR code, reference number, and receipt upload (`submit_payment`)
+- "Pay via GCash" button on pending orders to pay later
 
-#### Missing
-- Cart management
-- Checkout process
-- Order submission logic
-- Unique order reference numbers
-- Order item snapshots
-- Server-side total recalculation
-- Order status history
-- Customer order tracking page with real data
+#### Still Missing
+- Server-side total recalculation verification / anti-tampering
+- Order cancellation by customer
+- Pickup scheduling / delivery time slot
 
 ### Conclusion
-This is one of the biggest gaps between the project plan and the current implementation.
+The customer ordering workflow is now functional end-to-end from cart to payment submission.
 
 ---
 
 ## 6. Admin Operations Status
 
-### Status: Partially Complete
+### Status: Partially Complete (orders + payments functional)
 
 #### Included
 - Admin dashboard exists in `gb/dashboard.php`
 - Sidebar navigation exists for admin functions
 - Pages exist for orders, payments, deliveries, menus, reports, and settings
 - Menu management screen is in place
+- `gb/orders.php` now fetches all orders dynamically (all users) with stat cards (Total/Pending/Preparing/Completed)
+- Admin view-order modal with customer details, items, totals, status badges, order type, payment verification section, and inline status update
+- Inline GCash payment verification from orders page (view receipt, approve/reject → order becomes Paid)
+- `gb/payments.php` is fully dynamic (receipt viewing, approve/reject with reasons, stat cards)
 
 #### Still Missing
-- Real data dashboards
-- Actual order processing workflow
-- Payment approval/rejection logic
+- Real data dashboards (dashboard.php still has static stats)
 - Delivery assignment workflow
-- Sales reports from real transactions
+- Sales reports from real transactions (reports.php still static)
 - Audit log tracking
-- Menu or order actions tied to real business rules
+- Menu or order actions tied to real business rules (some modals non-wired)
 
 ### Conclusion
-Admin pages exist, but they are mostly UI scaffolding and demo data rather than complete functional modules.
+Admin order and payment-verification workflows are now functional; dashboard, deliveries, and reports remain UI scaffolding.
 
 ---
 
 ## 7. Payment Verification Status
 
-### Status: Not Implemented in Full
+### Status: Implemented (GCash flow)
 
 #### Included
-- Payment-related pages exist in the admin flow
-- Some UI placeholders for payment and GCash-related processes are present
+- GCash QR payment modal (shared include `includes/gcash_modal.php`) with QR code, amount, reference number, receipt upload
+- Customer payment submission via `submit_payment` (uploads receipt to `img/payments/`, creates `payments` row with status `pending`)
+- Payment verification queue on `gb/payments.php` (dynamic table, stat cards)
+- Approval/rejection with reasons via `verify_payment` (on approval: `order_status` → `Paid` + `order_status_history` row)
+- Shared receipt modal include (`includes/payment_receipt_modal.php`) reused by payments.php and orders.php
+- Inline payment verification from `gb/orders.php` (view receipt, approve/reject without page navigation)
+- `get_payments` and `get_order_payment` endpoints
+- Latest-payment-per-order join so orders list shows payment status
 
-#### Missing
-- GCash QR upload and instructions workflow
-- Payment submission by customer
-- Payment verification queue
-- Approval/rejection decisions with reasons
-- Payment status history
-- Receipt validation and secure storage
-- Audit trail of payment decisions
+#### Still Missing
+- Payment status history / audit trail of decisions
+- Receipt validation and secure storage hardening
+- Refund / re-submission flow after rejection
+- Notification to customer on payment approval/rejection
 
 ### Conclusion
-This part is still a major missing feature in the current build.
+The GCash payment verification flow is now implemented end-to-end for both customer submission and admin verification.
 
 ---
 
@@ -176,6 +184,7 @@ This part is still a major missing feature in the current build.
 #### Included
 - Delivery page exists in the admin area
 - Delivery-related navigation is included
+- `order_type` (Delivery/Pickup) is captured and stored
 
 #### Missing
 - Real assignment logic
@@ -213,17 +222,18 @@ These features are part of the plan but are not yet implemented.
 ### Status: Partially Complete
 
 #### Included
-- PDO queries are used
+- PDO queries are used (prepared statements)
 - Password hashing is in place
 - Session protection is used
+- Role checks on `get_order_items` and `get_order_payment` (admin bypasses ownership)
+- File upload validation (mime type) for receipts and menu images
 
 #### Missing
 - CSRF protection for forms
 - Strict input validation across pages
-- Role enforcement on every action
-- Data ownership checks for customer records
-- Secure file upload validation for payment receipts
-- Proper file storage controls
+- Role enforcement on every action (some endpoints still rely on session only)
+- Data ownership checks for customer records (partially done)
+- Secure file upload validation hardening
 - Secure session configuration
 - Audit logs for administrative actions
 
@@ -239,16 +249,20 @@ Security is better than a basic prototype, but it is not yet strong enough for a
 #### Included
 - Database connection exists
 - Basic MySQL records are referenced in code
+- Tables in use: `users`, `addresses`, `categories`, `menu_items`, `orders`, `order_items`, `payments`, `order_status_history`
+- `order_type` column added to `orders` (0 = Pickup, 1 = Delivery)
+- `subtotal`, `delivery_fee`, `total_amount` stored on orders
+- Unit price snapshotted in `order_items`
 
 #### Missing
-- Actual full schema for users, addresses, categories, menu items, orders, order items, payments, deliveries, status histories, notifications, feedback, and audit logs
+- Actual full schema file / migration scripts
 - Foreign key and index design
 - Unique constraints for order numbers and account data
-- Money types and transactional logic
-- Historical snapshot rules for orders and payments
+- Money types and transactional logic (transactions used in some endpoints)
+- Historical snapshot rules documentation
 
 ### Conclusion
-The database is not yet fully designed or implemented according to the plan.
+The database is functional for the implemented workflows but not yet fully designed or documented per the plan.
 
 ---
 
@@ -259,7 +273,8 @@ The database is not yet fully designed or implemented according to the plan.
 #### Included
 - Project plan file exists
 - README exists
-- The project is described as a prototype in documentation
+- Progress document exists (this file)
+- Shared includes: `gcash_modal.php`, `payment_receipt_modal.php`
 
 #### Missing
 - Final SQL schema
@@ -275,39 +290,42 @@ Documentation is good for planning, but the project is not yet mature enough to 
 
 ## Final Verdict
 
-### Current Status: Prototype / Early Functional Build
+### Current Status: Functional Mid-Stage Build
 
-The project is following the intended direction and architecture from the plan, but not yet complete according to the final scope described in `GoBinalot_Final_Project_Plan.md`.
+The project has moved beyond a basic prototype. Customer ordering, GCash payment submission, admin payment verification, and admin order management are now functional end-to-end.
 
 #### What is already in place
-- Project foundation
-- PHP + MySQL setup
-- Authentication basics
-- Admin/customer page layout
-- Menu browsing and partial admin menu management
+- Project foundation (PHP + MySQL + PDO)
+- Authentication basics (register/login with password hashing)
+- Admin/customer page layout and role-based routing
+- Menu browsing and admin menu management
+- Customer cart, checkout, and saved-address flow
+- Customer order tracking with real data
+- GCash payment submission (QR + receipt upload)
+- Admin order management (dynamic table, view modal, status updates)
+- Admin payment verification (receipt viewing, approve/reject)
+- Shared modal includes (GCash, payment receipt)
+- `order_type` (Delivery/Pickup) support
 
 #### What is still missing or incomplete
-- Cart and checkout workflow
-- Real order processing
-- Payment verification
-- Delivery management
-- Notifications
-- History and reports
-- Strong security enforcement
-- Full database schema and audit trail
+- Delivery management and delivery person dashboard
+- Dashboard/reports with real data (still static)
+- Notifications and feedback system
+- CSRF protection and security hardening
+- Full database schema/migration scripts
+- Audit trail for admin actions
+- Customer order cancellation
+- Tests and deployment checklist
 
 ### Recommendation
-The team should treat the current project as a prototype foundation and continue implementing it in phases matching the roadmap in the project plan.
-
-The next priority should be:
-1. Finalize business rules with the restaurant owner
-2. Create the full database schema
-3. Implement cart + checkout
-4. Implement order status tracking
-5. Implement payment verification flow
-6. Implement delivery assignments and tracking
-7. Add notifications, reports, and feedback
-8. Harden security and validation
+Continue implementing in phases matching the roadmap:
+1. ✅ Cart + checkout (done)
+2. ✅ Order status tracking (done)
+3. ✅ Payment verification flow (done)
+4. Delivery assignments and tracking (next priority)
+5. Notifications, reports, and feedback
+6. Security hardening and validation
+7. Schema documentation, tests, and deployment prep
 
 ---
 
@@ -318,11 +336,11 @@ Status by phase:
 - Architecture: Mostly complete
 - Authentication: Partially complete
 - Menu management: Partially complete
-- Ordering flow: Not yet complete
-- Admin dashboard: Partially complete
-- Payment verification: Not complete
+- Ordering flow: Implemented (customer-facing)
+- Admin dashboard: Partially complete (orders + payments functional)
+- Payment verification: Implemented (GCash flow)
 - Delivery management: Not complete
 - Security: Partially complete
 - Final project readiness: Not yet reached
 
-This project is on the right track, but it is not yet fully aligned with the full final project plan in functionality and completeness.
+The project is on the right track and has moved from prototype to a functional mid-stage build, but it is not yet fully aligned with the full final project plan in functionality and completeness.

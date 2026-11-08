@@ -4,18 +4,22 @@ GoBinalot is a PHP-based restaurant ordering and admin management prototype for 
 
 ## Project status
 
-This project is currently a working prototype with a usable front-end, PHP page structure, and session-based user flow. The app includes:
+This project is a working mid-stage build with a usable front-end, PHP backend, and session-based user flow. The app includes:
 
 - Public home and storefront views
 - Login and registration flow
 - Session-based authentication and redirection
 - Admin/customer role-based page routing
-- Dashboard, menu, order, report, and settings screens
-- Bootstrap 5 + custom styling and basic JavaScript interactions
+- Dashboard, menu, order, payment, report, and settings screens
+- Bootstrap 5 + custom styling and JavaScript interactions
 - Menu/category/address management actions tied to PHP processing logic
 - Customer cart, checkout summary, and saved-address flow
+- Customer ordering flow: cart → checkout (Delivery/Pickup) → place order → GCash payment (QR + receipt upload) → order tracking
+- Admin order management: dynamic order table, view-order modal, inline GCash payment verification (approve/reject), status updates
+- Admin payment verification page: dynamic queue, receipt viewing, approve/reject with reasons
+- Shared modal includes (`gcash_modal.php`, `payment_receipt_modal.php`)
 
-The app is not yet a full production-ready business system, but the foundation is in place for continued backend development.
+The app is not yet production-ready (delivery management, reports, notifications, and security hardening remain), but the ordering and payment-verification workflows are functional end-to-end.
 
 ## Recent fixes (customer ordering flow)
 
@@ -28,6 +32,16 @@ The app is not yet a full production-ready business system, but the foundation i
 - Checkout modal customer name shows first + last name as printed text instead of an editable input field.
 - "Default" saved-address badge styling is confined to the badge span only.
 
+## Recent additions (ordering & payment flow)
+
+- Customer ordering: cart → checkout (Delivery/Pickup) → place order with server-side totals and item snapshots → GCash payment (QR + receipt upload) → order tracking (`gb/my_orders.php`).
+- `order_type` persisted (0 = Pickup, 1 = Delivery); delivery fee = 0 for Pickup.
+- GCash payment modal shared include (`includes/gcash_modal.php`) with polished styling.
+- Admin order management (`gb/orders.php`): dynamic table, stat cards, view-order modal with items/totals/status, inline GCash verification, status updates.
+- Admin payment verification (`gb/payments.php`): dynamic queue, receipt viewing, approve/reject with reasons.
+- Shared receipt modal include (`includes/payment_receipt_modal.php`) reused by payments and orders.
+- `get_order_items` and `get_order_payment` endpoints (role-aware ownership checks).
+
 ## What is working
 
 - PHP page structure and navigation are organized and consistent
@@ -38,6 +52,9 @@ The app is not yet a full production-ready business system, but the foundation i
 - Category and menu item CRUD logic is present in `includes/actions.php`
 - Menu image upload handling is implemented with validation and deduplication checks
 - Customer cart, checkout, and saved-addresses flow functional
+- Customer ordering flow: cart → checkout (Delivery/Pickup) → place order → GCash payment (QR + receipt upload) → order tracking (`gb/my_orders.php`)
+- Admin order management: dynamic table, view-order modal, inline GCash verification, status updates (`gb/orders.php`)
+- Admin payment verification: dynamic queue, receipt viewing, approve/reject (`gb/payments.php`)
 
 ## What still needs cleanup before the app is considered complete
 
@@ -107,7 +124,9 @@ GoBinalot/
 │   ├── auth.php
 │   ├── config.php
 │   ├── footer.php
+│   ├── gcash_modal.php
 │   ├── header.php
+│   ├── payment_receipt_modal.php
 │   └── sidebar.php
 ├── js/
 │   ├── action.js
@@ -162,7 +181,25 @@ A valid `users` record with role `admin` should exist for access to protected ad
 
 ## Final cleanup checklist
 
-Before this project is considered ready for a fuller business rollout, these should be addressed:
+Completed:
+- [x] Customer cart, checkout, and order submission connected to real DB queries
+- [x] Customer order tracking (`gb/my_orders.php`) fetches real data
+- [x] Admin order management (`gb/orders.php`) fetches real data
+- [x] Admin payment verification (`gb/payments.php`) fetches real data
+- [x] GCash payment submission + admin verification flow implemented
+- [x] Shared modal includes (`gcash_modal.php`, `payment_receipt_modal.php`)
+
+Still to address:
+- [ ] Add migration scripts for the project schema
+- [ ] Remove or guard demo-only logic that assumes data always exists (dashboard, reports, deliveries still static)
+- [ ] Standardize validation across all forms
+- [ ] Connect remaining admin workflows (deliveries, reports) to real database queries
+- [ ] Harden session and role-based authorization rules
+- [ ] Improve centralized error logging and message handling
+- [ ] Review upload storage and security for menu images and receipts
+- [ ] Add tests for authentication, menu updates, and order flows
+- [ ] Document all required database tables and expected columns
+- [ ] Clean up placeholder content and static/demo labels in UI modules
 
 - Add migration scripts for the project schema
 - Remove or guard demo-only logic that assumes data always exists
