@@ -121,7 +121,7 @@
             </thead>
             <tbody>
               <tr>
-                <td class="fw-bold">#ORD-1082</td>
+                <td class="fw-bold">#GB-1082</td>
                 <td>Maria Santos</td>
                 <td>2x Chicken Inasal Binalot</td>
                 <td>₱370.00</td>
@@ -131,7 +131,7 @@
               </tr>
 
               <tr>
-                <td class="fw-bold">#ORD-1081</td>
+                <td class="fw-bold">#GB-1081</td>
                 <td>Juan Dela Cruz</td>
                 <td>1x Pork Adobo, 1x Halo-Halo</td>
                 <td>₱295.00</td>
@@ -141,7 +141,7 @@
               </tr>
 
               <tr>
-                <td class="fw-bold">#ORD-1080</td>
+                <td class="fw-bold">#GB-1080</td>
                 <td>Ana Reyes</td>
                 <td>3x Crispy Lechon Kawali</td>
                 <td>₱585.00</td>
@@ -163,7 +163,7 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow-sm">
       <div class="modal-header border-0 pb-2">
-        <h5 class="modal-title fw-bold text-success">Order Details #ORD-1082</h5>
+        <h5 class="modal-title fw-bold text-success">Order Details #GB-1082</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 

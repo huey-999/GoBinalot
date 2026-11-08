@@ -160,7 +160,7 @@
             </thead>
             <tbody>
               <tr>
-                <td>#ORD-1082</td>
+                <td>#GB-1082</td>
                 <td>Maria Santos</td>
                 <td><span class="badge bg-success">5.0</span></td>
                 <td>Fast delivery and delicious food. Highly recommended.</td>
@@ -168,7 +168,7 @@
               </tr>
 
               <tr>
-                <td>#ORD-1081</td>
+                <td>#GB-1081</td>
                 <td>Juan Dela Cruz</td>
                 <td><span class="badge bg-warning text-dark">4.5</span></td>
                 <td>Good taste, but packaging could be improved.</td>
@@ -176,7 +176,7 @@
               </tr>
 
               <tr>
-                <td>#ORD-1080</td>
+                <td>#GB-1080</td>
                 <td>Ana Reyes</td>
                 <td><span class="badge bg-success">5.0</span></td>
                 <td>Very satisfying meal and excellent service.</td>

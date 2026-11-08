@@ -47,16 +47,16 @@ $menuItems = $conn->query(
       <h1 class="dashboard-heading mb-0">Build your binalot order</h1>
     </div>
 
-    <!-- <div class="order-header-controls d-flex align-items-center gap-2">
+    <div class="order-header-controls d-flex align-items-center gap-2">
       <div class="delivery-toggle-group" aria-label="Order type selector" role="radiogroup">
-        <button class="delivery-toggle active" type="button" data-order-type="delivery" role="radio" aria-checked="true">
+        <button class="delivery-toggle" type="button" data-order-type="delivery" role="radio" aria-checked="false">
           <i class="fa-solid fa-motorcycle me-1"></i>Delivery
         </button>
         <button class="delivery-toggle" type="button" data-order-type="pickup" role="radio" aria-checked="false">
           <i class="fa-solid fa-bag-shopping me-1"></i>Pickup
         </button>
       </div>
-    </div> -->
+    </div>
   </div>
 
   <div class="customer-order-layout">
@@ -131,7 +131,8 @@ $menuItems = $conn->query(
                     data-name="<?= htmlspecialchars($menu['name']) ?>"
                     data-price="<?= (float) $menu['price'] ?>"
                     data-image="<?= $image ?>"
-                    data-category="<?= $categorySlug ?>">
+                    data-category="<?= $categorySlug ?>"
+                    data-menu-item-id="<?= (int) $menu['id'] ?>">
                     <i class="fa-solid fa-cart-plus me-2"></i>Add to cart
                   </button>
                 </div>
@@ -188,10 +189,6 @@ $menuItems = $conn->query(
             <span>Delivery</span>
             <strong id="deliveryValue">₱49.00</strong>
           </div>
-          <div class="total-row">
-            <span>Service fee</span>
-            <strong id="serviceValue">₱0.00</strong>
-          </div>
           <div class="total-row grand-total">
             <span>Total</span>
             <strong id="totalValue">₱49.00</strong>
@@ -223,66 +220,52 @@ $menuItems = $conn->query(
       </div>
 
       <form id="checkoutForm">
-        <div class="modal-body p-2">
-          <div class="row g-2">
-            <div class="col-md-6">
-              <label class="form-label">Customer name</label>
-              <p class="form-control-static"><?= $customerName ?></p>
+        <div class="modal-body p-3">
+          <!-- Customer -->
+          <div class="checkout-section mb-3">
+            <div class="checkout-section-title">Customer</div>
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="form-label">Customer name</label>
+                <p class="form-control-static"><?= $customerName ?></p>
+              </div>
             </div>
-            <!-- <div class="col-md-6">
-              <label class="form-label">Phone number</label>
-              <input type="tel" class="form-control" value="<?= $customerPhone ?>" required>
-            </div> -->
-            <div class="col-12">
-              <label class="form-label">Delivery address</label>
-              <?php if (!empty($customerAddresses)): ?>
-                <div class="saved-addresses-list" id="savedAddressesList">
-                  <?php foreach ($customerAddresses as $addr): ?>
-                    <div class="saved-address-item">
-                      <input type="radio" name="saved_address" id="saved_addr_<?= $addr['id'] ?>" value="<?= $addr['id'] ?>" <?= !empty($addr['is_default']) ? 'checked' : '' ?> onchange="selectSavedAddress(<?= json_encode($addr) ?>)">
-                      <label for="saved_addr_<?= $addr['id'] ?>" class="saved-address-label">
-                        <?php if (!empty($addr['is_default'])): ?>
-                          <span class="address-default-badge">Default</span>
-                        <?php endif; ?>
-                        <div class="address-type"><?= htmlspecialchars($addr['type'] ?? 'Home') ?></div>
-                        <div class="address-text"><?= htmlspecialchars($addr['address']) ?></div>
-                        <div class="address-phone"><?= htmlspecialchars($addr['contact_number'] ?? '') ?></div>
-                      </label>
-                    </div>
-                  <?php endforeach; ?>
-                </div>
-                <input type="hidden" id="selectedAddressId" value="<?= $customerAddresses[0]['id'] ?? '' ?>">
-                <input type="hidden" id="selectedAddressText" value="<?= htmlspecialchars($customerAddresses[0]['address'] ?? '') ?>">
-                <input type="hidden" id="selectedAddressPhone" value="<?= htmlspecialchars($customerAddresses[0]['contact_number'] ?? '') ?>">
-              <?php else: ?>
-                <textarea class="form-control" rows="2" placeholder="House / unit number, street, barangay, city..." required><?= $customerAddress ?></textarea>
-              <?php endif; ?>
-            </div>
-            <!-- <div class="col-md-6">
-              <label class="form-label">Order type</label>
-              <select class="form-select">
-                <option selected>Delivery</option>
-                <option>Pickup</option>
-              </select>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label">Payment method</label>
-              <select class="form-select">
-                <option selected>Cash on Delivery</option>
-                <option>GCash</option>
-                <option>Bank Transfer</option>
-              </select>
-            </div>
-            <div class="col-12">
-              <label class="form-label">Special instructions</label>
-              <textarea class="form-control" rows="2" id="checkoutNotes" placeholder="Any notes for kitchen or rider?"></textarea>
-            </div>  -->
           </div>
 
-          <div class="checkout-summary">
+          <!-- Delivery address -->
+          <div class="checkout-section mb-3" id="checkoutAddressSection" data-order-type="delivery">
+            <div class="checkout-section-title">Delivery address</div>
+            <?php if (!empty($customerAddresses)): ?>
+              <div class="saved-addresses-list" id="savedAddressesList">
+                <?php foreach ($customerAddresses as $addr): ?>
+                  <div class="saved-address-item">
+                    <input type="radio" name="saved_address" id="saved_addr_<?= $addr['id'] ?>" value="<?= $addr['id'] ?>" <?= !empty($addr['is_default']) ? 'checked' : '' ?> onchange="selectSavedAddress(<?= json_encode($addr) ?>)">
+                    <label for="saved_addr_<?= $addr['id'] ?>" class="saved-address-label">
+                      <?php if (!empty($addr['is_default'])): ?>
+                        <span class="address-default-badge">Default</span>
+                      <?php endif; ?>
+                      <div class="address-type"><?= htmlspecialchars($addr['type'] ?? 'Home') ?></div>
+                      <div class="address-text"><?= htmlspecialchars($addr['address']) ?></div>
+                      <div class="address-phone"><?= htmlspecialchars($addr['contact_number'] ?? '') ?></div>
+                    </label>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+              <input type="hidden" id="selectedAddressId" value="<?= $customerAddresses[0]['id'] ?? '' ?>">
+              <input type="hidden" id="selectedAddressText" value="<?= htmlspecialchars($customerAddresses[0]['address'] ?? '') ?>">
+              <input type="hidden" id="selectedAddressPhone" value="<?= htmlspecialchars($customerAddresses[0]['contact_number'] ?? '') ?>">
+            <?php else: ?>
+              <textarea class="form-control" rows="2" placeholder="House / unit number, street, barangay, city..." required><?= $customerAddress ?></textarea>
+            <?php endif; ?>
+          </div>
+          <input type="hidden" id="checkoutOrderType" value="1">
+
+          <!-- Order summary -->
+          <div class="checkout-section checkout-summary-section">
+            <div class="checkout-section-title">Order summary</div>
             <div id="checkoutItemList" class="checkout-item-list mb-2"></div>
             <div class="summary-row"><span>Items</span><strong id="checkoutItemsCount">0</strong></div>
-            <div class="summary-row"><span>Delivery</span><strong id="checkoutDelivery">₱49.00</strong></div>
+            <div class="summary-row"><span id="checkoutDeliveryLabel">Delivery</span><strong id="checkoutDelivery">₱49.00</strong></div>
             <div class="summary-row total"><span>Total</span><strong id="checkoutTotal">₱49.00</strong></div>
           </div>
         </div>
@@ -295,6 +278,8 @@ $menuItems = $conn->query(
     </div>
   </div>
 </div>
+
+<?php include '../includes/gcash_modal.php'; ?>>
 
 <!-- Added to cart toast -->
 <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1060;">

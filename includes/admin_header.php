@@ -82,7 +82,7 @@ $pageTitle = $pageTitleMap[$currentPage] ?? 'GoBinalot';
         </button>
         <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 p-2" style="width: 280px;">
           <li class="dropdown-header fw-bold">Recent Alerts</li>
-          <li><a class="dropdown-item small text-wrap py-2" href="#"><i class="fa-solid fa-utensils text-success me-2"></i>New order #ORD-1082 received</a></li>
+          <li><a class="dropdown-item small text-wrap py-2" href="#"><i class="fa-solid fa-utensils text-success me-2"></i>New order #GB-1082 received</a></li>
           <li><a class="dropdown-item small text-wrap py-2" href="#"><i class="fa-solid fa-calendar-check text-warning me-2"></i>New reservation for 6 guests</a></li>
         </ul>
       </div>
