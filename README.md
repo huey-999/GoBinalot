@@ -17,6 +17,8 @@ This project is a working mid-stage build with a usable front-end, PHP backend, 
 - Customer ordering flow: cart → checkout (Delivery/Pickup) → place order → GCash payment (QR + receipt upload) → order tracking
 - Admin order management: dynamic order table, view-order modal, inline GCash payment verification (approve/reject), status updates
 - Admin payment verification page: dynamic queue, receipt viewing, approve/reject with reasons
+- Admin delivery management: dynamic delivery table, rider assignment, delivery status updates, delivery history tracking
+- Rider dashboard: assigned deliveries, status updates, delivery details
 - Shared modal includes (`gcash_modal.php`, `payment_receipt_modal.php`)
 
 The app is not yet production-ready (delivery management, reports, notifications, and security hardening remain), but the ordering and payment-verification workflows are functional end-to-end.
@@ -107,12 +109,15 @@ GoBinalot/
 │   ├── dashboard.php
 │   ├── deliveries.php
 │   ├── menus.php
+│   ├── my_deliveries.php
 │   ├── my_orders.php
 │   ├── orders.php
 │   ├── payments.php
 │   ├── profile.php
 │   ├── reports.php
 │   └── settings.php
+├── sql/
+│   └── schema.sql
 ├── css/
 │   └── style.css
 ├── img/
@@ -193,7 +198,8 @@ Still to address:
 - [ ] Add migration scripts for the project schema
 - [ ] Remove or guard demo-only logic that assumes data always exists (dashboard, reports, deliveries still static)
 - [ ] Standardize validation across all forms
-- [ ] Connect remaining admin workflows (deliveries, reports) to real database queries
+- [x] Connect remaining admin workflows (deliveries, reports) to real database queries
+- [ ] Reports still use static data
 - [ ] Harden session and role-based authorization rules
 - [ ] Improve centralized error logging and message handling
 - [ ] Review upload storage and security for menu images and receipts

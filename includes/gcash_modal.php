@@ -1,3 +1,12 @@
+<?php
+if (!function_exists('getSystemSetting')) {
+    include __DIR__ . '/settings_helper.php';
+}
+$gcashModalQrUrl = getSystemSetting('gcash_qr_image_url', '');
+if (!empty($gcashModalQrUrl)) {
+    echo '<script>window.gcashQrUrl = ' . json_encode($gcashModalQrUrl) . ';</script>';
+}
+?>
 <!-- ==========================================================================
      GCash Payment Modal (shared across customer pages)
      ========================================================================== -->
@@ -56,7 +65,7 @@
 
         <div class="modal-footer border-0 pt-2 pb-4 px-4">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-success btn-gcash-submit" id="btnSubmitPayment" disabled>Submit Payment</button>
+          <button type="submit" class="btn btn-success btn-gcash-submit" id="btnSubmitPayment" disabled>Submit Payment</button>
         </div>
       </form>
     </div>

@@ -1,3 +1,8 @@
+<?php
+$footerSiteName = getSystemSetting('website_name', 'Binalot sa Bukid');
+$footerEmail = getSystemSetting('email', 'kainan@binalotsabukid.ph');
+$footerPhone = getSystemSetting('contact_number', '+63 (0917) 123-4567');
+?>
 <!-- ==========================================================================
        ========================= FOOTER SECTION =================================
        ========================================================================== -->
@@ -5,7 +10,7 @@
     <div class="container">
       <div class="row g-4 mb-4">
         <div class="col-lg-4 col-md-6">
-          <h5 class="fw-bold text-success"><i class="fa-solid fa-leaf me-2"></i>Binalot sa Bukid</h5>
+          <h5 class="fw-bold text-success"><i class="fa-solid fa-leaf me-2"></i><?= htmlspecialchars($footerSiteName) ?></h5>
           <p class="small mb-3 footer-text">Serving delicious, authentic Filipino comfort food wrapped in fresh banana leaves. See you at our bukid!</p>
           <div>
             <a href="#" class="social-icon" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
@@ -26,8 +31,8 @@
           <h5 class="fw-bold">Location & Contact</h5>
           <ul class="list-unstyled small footer-text">
             <li class="mb-2"><i class="fa-solid fa-location-dot me-2 text-warning"></i> National Highway, Bukid District, Laguna, Philippines</li>
-            <li class="mb-2"><i class="fa-solid fa-phone me-2 text-warning"></i> +63 (0917) 123-4567</li>
-            <li class="mb-2"><i class="fa-solid fa-envelope me-2 text-warning"></i> kainan@binalotsabukid.ph</li>
+            <li class="mb-2"><i class="fa-solid fa-phone me-2 text-warning"></i> <?= htmlspecialchars($footerPhone) ?></li>
+            <li class="mb-2"><i class="fa-solid fa-envelope me-2 text-warning"></i> <?= htmlspecialchars($footerEmail) ?></li>
           </ul>
         </div>
       </div>
@@ -36,7 +41,7 @@
 
       <div class="row align-items-center small footer-text">
         <div class="col-md-6 text-center text-md-start">
-          &copy; <span id="currentYear"></span> Binalot sa Bukid. All Rights Reserved.
+          &copy; <span id="currentYear"></span> <?= htmlspecialchars($footerSiteName) ?>. All Rights Reserved.
         </div>
         <div class="col-md-6 text-center text-md-end mt-2 mt-md-0">
           <a href="#" class="text-light text-decoration-none me-3">Privacy Policy</a>
@@ -90,7 +95,7 @@
   <script src="js/script.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      const toastEl = document.querySelector('.toast');
+      const toastEl = document.querySelector('.toast:not([data-manual-toast="true"])');
       if (toastEl) {
         const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
         toast.show();

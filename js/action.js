@@ -814,7 +814,8 @@ if (typeof jQuery === 'undefined') {
 
     window.placeOrder = function (cart, addressId, paymentMethod, orderType) {
       const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-      const delivery = orderType === 0 ? 0 : (subtotal > 500 ? 0 : 49);
+      const deliveryFee = (typeof window.deliveryFee !== 'undefined') ? window.deliveryFee : 49;
+      const delivery = orderType === 0 ? 0 : (subtotal > 500 ? 0 : deliveryFee);
       const total = subtotal + delivery;
 
       $.ajax({
@@ -851,7 +852,11 @@ if (typeof jQuery === 'undefined') {
                 $gcashModal.find('#gcashAmount').val(total);
                 $gcashModal.find('#gcashOrderNumber').text(orderNumber);
                 $gcashModal.find('#gcashAmountDisplay').text('₱' + total.toFixed(2));
-                $gcashModal.find('#gcashQrImage').attr('src', 'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(orderNumber) + '&size=300x300');
+                if (window.gcashQrUrl) {
+                  $gcashModal.find('#gcashQrImage').attr('src', window.gcashQrUrl);
+                } else {
+                  $gcashModal.find('#gcashQrImage').attr('src', 'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(orderNumber) + '&size=300x300');
+                }
                 $gcashModal.find('#gcashReferenceNumber').val('').prop('disabled', false);
                 $gcashModal.find('#gcashReceipt').val('');
                 $gcashModal.find('#btnSubmitPayment').prop('disabled', true);
@@ -902,5 +907,41 @@ if (typeof jQuery === 'undefined') {
         }
       });
     };
+
+    // System Settings form submission (admin only)
+    const $systemSettingsForm = $('#systemSettingsForm');
+    if ($systemSettingsForm.length) {
+      $systemSettingsForm.on('submit', function (event) {
+        event.preventDefault();
+
+        const $submitButton = $(this).find('button[type="submit"]');
+        const originalText = $submitButton.text();
+        const formData = new FormData(this);
+
+        $submitButton.prop('disabled', true).text('Saving...');
+
+        $.ajax({
+          url: '../includes/actions.php',
+          type: 'POST',
+          dataType: 'json',
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function (response) {
+            if (response && response.success) {
+              showToast(response.message || 'Settings updated successfully!', 'success');
+            } else {
+              showToast(response.message || 'Failed to update settings.', 'danger');
+            }
+          },
+          error: function () {
+            showToast('Something went wrong while saving the settings.', 'danger');
+          },
+          complete: function () {
+            $submitButton.prop('disabled', false).text(originalText);
+          }
+        });
+      });
+    }
   });
 }

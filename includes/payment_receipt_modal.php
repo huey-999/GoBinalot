@@ -55,6 +55,10 @@
                 <span>Status</span>
                 <span id="receiptStatus" class="fw-semibold">—</span>
               </div>
+              <div class="d-flex justify-content-between small mb-2" id="receiptNotesRow" style="display:none;">
+                <span>Notes</span>
+                <span id="receiptNotes" class="fw-semibold text-muted">—</span>
+              </div>
             </div>
           </div>
         </div>
@@ -77,7 +81,8 @@
         <p class="small mb-3">Verify that the submitted payment details match the order amount and transaction reference.</p>
 
         <label class="form-label small text-muted">Verified By</label>
-        <input type="text" class="form-control form-control-sm mb-3" value="Admin" readonly>
+        <input type="text" class="form-control form-control-sm mb-3" value="<?= htmlspecialchars(trim(($_SESSION['user_data']['first_name'] ?? '') . ' ' . ($_SESSION['user_data']['last_name'] ?? ''))) ?>" readonly>
+        <input type="hidden" id="verifyUserId" value="<?= (int) ($_SESSION['user_data']['id'] ?? 0) ?>">
 
         <label class="form-label small text-muted">Verification Notes</label>
         <textarea class="form-control form-control-sm" id="verifyNotes" rows="3" placeholder="Optional notes..."></textarea>
@@ -102,6 +107,10 @@
 
       <div class="modal-body p-3">
         <input type="hidden" id="rejectPaymentId">
+        <label class="form-label small text-muted">Rejected By</label>
+        <input type="text" class="form-control form-control-sm mb-3" value="<?= htmlspecialchars(trim(($_SESSION['user_data']['first_name'] ?? '') . ' ' . ($_SESSION['user_data']['last_name'] ?? ''))) ?>" readonly>
+        <input type="hidden" id="rejectUserId" value="<?= (int) ($_SESSION['user_data']['id'] ?? 0) ?>">
+
         <label class="form-label small text-muted">Rejection Reason</label>
         <select class="form-select form-select-sm mb-3" id="rejectReason">
           <option selected>Choose reason</option>

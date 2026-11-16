@@ -22,7 +22,15 @@
         ]
       ]
     ],
-    'customer' => [
+    'rider' => [
+    [
+      'title' => 'Delivery',
+      'items' => [
+        ['label' => 'My Deliveries', 'icon' => 'fa-solid fa-motorcycle', 'url' => 'my_deliveries.php', 'dataPage' => 'my_deliveries.php'],
+      ]
+    ]
+  ],
+  'customer' => [
       [
         'title' => 'Customer',
         'items' => [

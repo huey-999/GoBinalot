@@ -1,6 +1,10 @@
 <?php include '../includes/admin_header.php'; ?>
 
 <?php
+$deliveryFee = (float) getSystemSetting('delivery_fee', '49');
+$gcashQrUrl = getSystemSetting('gcash_qr_image_url', '');
+?>
+<?php
 $categories = $conn->query(
   "SELECT id, name, status
    FROM categories
@@ -279,11 +283,16 @@ $menuItems = $conn->query(
   </div>
 </div>
 
-<?php include '../includes/gcash_modal.php'; ?>>
+<?php include '../includes/gcash_modal.php'; ?>
+
+<script>
+  window.deliveryFee = <?= json_encode($deliveryFee) ?>;
+  window.gcashQrUrl = <?= json_encode($gcashQrUrl) ?>;
+</script>>
 
 <!-- Added to cart toast -->
 <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1060;">
-  <div id="addToCartToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+  <div id="addToCartToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" data-manual-toast="true">
     <div class="d-flex">
       <div class="toast-body">
         <i class="fa-solid fa-cart-plus me-2"></i>

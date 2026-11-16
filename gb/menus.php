@@ -1,10 +1,12 @@
 <?php include '../includes/admin_header.php'; ?>
 <?php
+if (!$conn instanceof PDO) {
+    die('Database connection is not available. Please ensure the `gobinalot` database exists and MySQL is running.');
+}
 $categoryOptions = $conn->query("SELECT id, name, status FROM categories ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <main class="main-content">
-  <div class="tab-content">
     <!-- TABS: MENU ITEMS | CATEGORIES -->
     <ul class="nav nav-tabs mb-3" id="menuTabs" role="tablist">
       <li class="nav-item" role="presentation">
@@ -149,41 +151,7 @@ $categoryOptions = $conn->query("SELECT id, name, status FROM categories ORDER B
         </div>
       </div>
 
-      <div class="table-card p-3">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="fw-bold text-success mb-0">Store Settings</h5>
-        </div>
-
-        <div class="row g-3">
-          <div class="col-md-6">
-            <div class="border rounded p-3 h-100">
-              <div class="small text-muted mb-2">GCash QR Image</div>
-              <div class="d-flex align-items-center gap-3">
-                <div class="bg-light rounded" style="width:88px;height:88px; display:flex; align-items:center; justify-content:center;">
-                  <i class="fa-solid fa-qrcode fa-2x text-success"></i>
-                </div>
-                <div>
-                  <div class="small fw-semibold">Current QR</div>
-                  <button class="btn btn-outline-success btn-sm mt-2">Upload New QR</button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col-md-6">
-            <div class="border rounded p-3 h-100">
-              <div class="small text-muted mb-2">Delivery Fee</div>
-              <label class="form-label small text-muted mb-1">Fee (PHP)</label>
-              <input type="number" class="form-control form-control-sm mb-2" value="49">
-              <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" checked>
-                <label class="form-check-label small">Enabled for delivery orders</label>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    </div> <!-- close menu-items-tab-pane -->
 
     <!-- TAB 2: CATEGORIES -->
     <div class="tab-pane fade" id="categories-tab-pane" role="tabpanel">
@@ -252,8 +220,8 @@ $categoryOptions = $conn->query("SELECT id, name, status FROM categories ORDER B
         </div>
       </div>
     </div>
+</div>
 
-  </div>
 </main>
 
 <!-- ADD MENU MODAL -->
