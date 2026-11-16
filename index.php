@@ -1,6 +1,7 @@
 <?php include 'includes/header.php'; ?>
 
 <?php
+$siteName = getSystemSetting('website_name', 'Binalot sa Bukid');
 $activeCategories = $conn->query(
     "SELECT id, name, status
      FROM categories
@@ -86,10 +87,10 @@ function gobinalotMenuSlug($value) {
               </div>
             </div>
           <?php endforeach; ?>
-        </div>
 
-        <div id="menu-empty-state" class="text-center py-5 text-muted" style="display: none;">
-          <p class="mb-0">No available menu items in this category right now.</p>
+          <div id="menu-empty-state" class="col-12 text-center py-5 text-muted" style="display: none;">
+            <p class="mb-0">No available menu items in this category right now.</p>
+          </div>
         </div>
       <?php else : ?>
         <div id="menu-empty-state" class="text-center py-5 text-muted">

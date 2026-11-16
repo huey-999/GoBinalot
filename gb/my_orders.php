@@ -1,4 +1,11 @@
-<?php include '../includes/admin_header.php'; ?>
+<?php
+include '../includes/config.php';
+include '../includes/auth.php';
+requireLogin('../login.php');
+include '../includes/actions.php';
+ensureDeliveryTables($conn);
+include '../includes/admin_header.php';
+?>
 <?php
 $currentUserRole = $_SESSION['user_data']['role'] ?? 'customer';
 $isCustomer = $currentUserRole === 'customer';
@@ -11,10 +18,15 @@ if ($userId) {
     $stmt = $conn->prepare("
       SELECT o.id, o.order_number, o.subtotal, o.delivery_fee, o.total_amount, o.order_status, o.created_at,
              u.first_name, u.last_name, a.contact_number, a.address,
-             GROUP_CONCAT(CONCAT(oi.quantity, 'x ', oi.item_name) SEPARATOR ', ') as items_summary
+              d.dispatched_at AS delivery_dispatched_at, d.eta AS delivery_eta,
+              d.delivered_at AS delivery_delivered_at,
+              r.first_name AS rider_first_name, r.last_name AS rider_last_name,
+              GROUP_CONCAT(CONCAT(oi.quantity, 'x ', oi.item_name) SEPARATOR ', ') as items_summary
       FROM orders o
       JOIN users u ON u.id = o.user_id
       LEFT JOIN addresses a ON a.id = o.address_id
+      LEFT JOIN deliveries d ON d.order_id = o.id
+      LEFT JOIN users r ON r.id = d.delivery_person
       LEFT JOIN order_items oi ON oi.order_id = o.id
       WHERE o.user_id = :user_id
       GROUP BY o.id
@@ -139,6 +151,14 @@ $statusBadgeClass = [
         </div>
 
         <div class="mt-3 border rounded p-3">
+          <div class="small text-muted mb-2">Delivery</div>
+          <div class="d-flex justify-content-between small mb-1"><span>Rider</span><span id="orderRider">—</span></div>
+          <div class="d-flex justify-content-between small mb-1"><span>Dispatched</span><span id="orderDispatchTime">—</span></div>
+          <div class="d-flex justify-content-between small mb-1"><span>ETA</span><span id="orderEta">—</span></div>
+          <div class="d-flex justify-content-between small mb-1"><span>Delivered</span><span id="orderDeliveryDate">—</span></div>
+        </div>
+
+        <div class="mt-3 border rounded p-3">
           <div class="small text-muted mb-2">Ordered Items</div>
           <div class="table-responsive">
             <table class="table table-sm mb-0">
@@ -172,6 +192,9 @@ $statusBadgeClass = [
   </div>
 </div>
 
+<?php
+$gcashQrUrl = getSystemSetting('gcash_qr_image_url', '');
+?>
 <?php include '../includes/gcash_modal.php'; ?>
 
 <script>
@@ -186,7 +209,11 @@ $statusBadgeClass = [
         document.getElementById('gcashAmount').value = total;
         document.getElementById('gcashOrderNumber').textContent = orderNumber;
         document.getElementById('gcashAmountDisplay').textContent = '₱' + total.toFixed(2);
+        <?php if (!empty($gcashQrUrl)) : ?>
+        document.getElementById('gcashQrImage').src = <?= json_encode($gcashQrUrl) ?>;
+        <?php else : ?>
         document.getElementById('gcashQrImage').src = 'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(orderNumber) + '&size=300x300';
+        <?php endif; ?>
         document.getElementById('gcashReferenceNumber').value = '';
         document.getElementById('gcashReceipt').value = '';
         document.getElementById('btnSubmitPayment').disabled = true;
@@ -260,7 +287,7 @@ $statusBadgeClass = [
         <span>Subtotal</span><span>${money(subtotal)}</span>
       </div>
       <div class="d-flex justify-content-between small mb-1">
-        <span>Delivery</span><span>${money(deliveryFee)}</span>
+        <span>Delivery Fee</span><span>${money(deliveryFee)}</span>
       </div>
       <div class="d-flex justify-content-between small mb-1">
         <span>Total</span><span class="fw-bold">${money(totalAmount)}</span>
@@ -272,6 +299,12 @@ $statusBadgeClass = [
 
     // Bottom total line
     $modal.find('.order-modal-total').text(money(totalAmount));
+
+    // Delivery details
+    $modal.find('#orderDispatchTime').text(order.delivery_dispatched_at ? String(order.delivery_dispatched_at).slice(0, 16).replace('T', ' ') : '—');
+    $modal.find('#orderEta').text(order.delivery_eta ? String(order.delivery_eta).slice(0, 16).replace('T', ' ') : '—');
+    $modal.find('#orderRider').text(order.rider_first_name ? ((order.rider_first_name || '') + ' ' + (order.rider_last_name || '')).trim() : 'Unassigned');
+    $modal.find('#orderDeliveryDate').text(order.delivery_delivered_at ? String(order.delivery_delivered_at).slice(0, 16).replace('T', ' ') : '—');
 
     // Ordered Items
     const $itemsBody = $modal.find('.items-table-body');

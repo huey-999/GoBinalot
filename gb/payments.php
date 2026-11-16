@@ -91,6 +91,12 @@
     return '₱' + parseFloat(value || 0).toFixed(2);
   }
 
+  function paymentStatusText(value) {
+    if (!value) return '—';
+    const text = String(value);
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
   const statusBadgeClass = {
     pending: 'bg-warning text-dark',
     approved: 'bg-success',
@@ -161,7 +167,7 @@
                   ? '<button type="button" class="btn btn-xs btn-outline-secondary btn-view-receipt" data-payment-id="' + p.id + '" data-order-number="' + escapeHtml(p.order_number) + '" data-customer="' + escapeHtml(customer) + '" data-method="' + escapeHtml(p.method) + '" data-ref="' + escapeHtml(p.reference_number) + '" data-amount="' + p.amount + '" data-submitted="' + escapeHtml(p.created_at) + '" data-status="' + escapeHtml(p.payment_status) + '" data-receipt="' + escapeHtml(p.receipt) + '" title="View Receipt"><i class="fa-solid fa-image"></i></button>'
                   : '<span class="text-muted small">—</span>'}
               </td>
-              <td><span class="badge ${badgeClass}">${escapeHtml(p.payment_status)}</span></td>
+              <td><span class="badge ${badgeClass}">${escapeHtml(paymentStatusText(p.payment_status))}</span></td>
               <td>${verifiedBy}</td>
               <td>${actions}</td>
             </tr>
@@ -199,7 +205,7 @@
     $('#receiptRefNo').text($(this).data('ref'));
     $('#receiptAmount').text(money($(this).data('amount')));
     $('#receiptSubmitted').text($(this).data('submitted'));
-    $('#receiptStatus').text($(this).data('status'));
+    $('#receiptStatus').text(paymentStatusText($(this).data('status')));
 
     const modal = new bootstrap.Modal(document.getElementById('receiptModal'));
     modal.show();

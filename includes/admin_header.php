@@ -1,9 +1,109 @@
 <?php
 
 include 'config.php';
-include 'auth.php';
+include_once 'auth.php';
 
 requireLogin('../login.php');
+
+// Maintenance mode check (non-admin users blocked)
+if (getSystemSetting('maintenance_mode', '0') === '1') {
+    $userRole = $_SESSION['user_data']['role'] ?? 'customer';
+    if ($userRole !== 'admin') {
+        http_response_code(503);
+        echo '<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Under Maintenance</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e8f0e9 100%);
+      color: #232c25;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    .maintenance-card {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(46, 111, 64, 0.12);
+      padding: 3rem 2.5rem;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+      border: 1px solid rgba(46, 111, 64, 0.1);
+    }
+    .maintenance-icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 1.5rem;
+      background: linear-gradient(135deg, #2e6f40 0%, #1f4d2c 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 2rem;
+      box-shadow: 0 4px 16px rgba(46, 111, 64, 0.3);
+    }
+    .maintenance-title {
+      font-family: "Merriweather", Georgia, serif;
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #2e6f40;
+      margin-bottom: 0.75rem;
+    }
+    .maintenance-subtitle {
+      color: #5c685e;
+      font-size: 1rem;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+    .maintenance-divider {
+      width: 60px;
+      height: 3px;
+      background: linear-gradient(90deg, #2e6f40, #c89531);
+      margin: 0 auto 1.5rem;
+      border-radius: 2px;
+    }
+    .maintenance-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(46, 111, 64, 0.08);
+      color: #2e6f40;
+      padding: 0.5rem 1rem;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .maintenance-badge i {
+      font-size: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="maintenance-card">
+    <div class="maintenance-icon">
+      <i class="fa-solid fa-screwdriver-wrench"></i>
+    </div>
+    <h1 class="maintenance-title">Under Maintenance</h1>
+    <div class="maintenance-divider"></div>
+    <p class="maintenance-subtitle">We are currently performing scheduled maintenance to improve your experience. We will be back shortly. Thank you for your patience!</p>
+    <span class="maintenance-badge"><i class="fa-solid fa-circle-notch fa-spin"></i> Maintenance in progress</span>
+  </div>
+</body>
+</html>';
+        exit;
+    }
+}
 
 $currentPage = basename($_SERVER['PHP_SELF']);
 $pageTitleMap = [
@@ -67,9 +167,9 @@ $pageTitle = $pageTitleMap[$currentPage] ?? 'GoBinalot';
       <button class="sidebar-toggle-btn" id="sidebarToggleBtn" aria-label="Toggle Sidebar">
         <i class="fa-solid fa-bars"></i>
       </button>
-      <a class="navbar-brand d-flex align-items-center gap-2" href="<?= ($_SESSION['user_data']['role'] == 'admin' ? 'dashboard.php' : 'orders.php'); ?> ">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="<?= ($_SESSION['user_data']['role'] == 'admin' ? 'dashboard.php' : ($_SESSION['user_data']['role'] == 'rider' ? 'my_deliveries.php' : 'my_orders.php')); ?> ">
         <img id="restaurant-logo" src="../img/logo.jpg" alt="Binalot sa Bukid Logo" style="height: 40px; width: auto;">
-        <span class="fw-bold fs-5 text-success font-heading d-none d-sm-inline">GoBinalot</span>
+        <span class="fw-bold fs-5 text-success font-heading d-none d-sm-inline"><?= htmlspecialchars(getSystemSetting('website_name', 'GoBinalot')) ?></span>
       </a>
     </div>
 
@@ -111,7 +211,7 @@ $pageTitle = $pageTitleMap[$currentPage] ?? 'GoBinalot';
   <!-- Custom Script to Auto-Show Toasts -->
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      const toastElList = document.querySelectorAll('.toast[data-autoshow="true"]');
+      const toastElList = document.querySelectorAll('.toast:not([data-manual-toast="true"])');
       const toastList = [...toastElList].map(toastEl => new bootstrap.Toast(toastEl));
       toastList.forEach(toast => toast.show());
     });

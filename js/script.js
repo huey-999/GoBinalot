@@ -669,7 +669,8 @@ document.addEventListener('DOMContentLoaded', function () {
   function renderCart() {
     if (!cartItemsContainer) return;
     const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-    const delivery = window.selectedOrderType === 'pickup' ? 0 : (subtotal > 500 ? 0 : 49);
+    const deliveryFee = (typeof window.deliveryFee !== 'undefined') ? window.deliveryFee : 49;
+    const delivery = window.selectedOrderType === 'pickup' ? 0 : (subtotal > 500 ? 0 : deliveryFee);
     const total = subtotal + delivery;
     if (subtotalValue) subtotalValue.textContent = formatMoney(subtotal);
     if (deliveryValue) deliveryValue.textContent = formatMoney(delivery);

@@ -6,14 +6,19 @@ try {
     SELECT o.id, o.order_number, o.subtotal, o.delivery_fee, o.total_amount, o.order_status, o.created_at, o.order_type,
            u.first_name, u.last_name, u.email,
            a.contact_number, a.address,
-           GROUP_CONCAT(CONCAT(oi.quantity, 'x ', oi.item_name) SEPARATOR ', ') as items_summary,
-           pay.id AS payment_id, pay.method AS payment_method, pay.amount AS payment_amount,
-           pay.reference_number AS payment_reference, pay.receipt AS payment_receipt,
-           pay.payment_status AS payment_status, pay.verified_by AS payment_verified_by,
-           pay.verified_at AS payment_verified_at
+             d.dispatched_at AS delivery_dispatched_at, d.eta AS delivery_eta,
+             d.delivered_at AS delivery_delivered_at,
+             r.first_name AS rider_first_name, r.last_name AS rider_last_name,
+             GROUP_CONCAT(CONCAT(oi.quantity, 'x ', oi.item_name) SEPARATOR ', ') as items_summary,
+            pay.id AS payment_id, pay.method AS payment_method, pay.amount AS payment_amount,
+            pay.reference_number AS payment_reference, pay.receipt AS payment_receipt,
+            pay.payment_status AS payment_status, pay.verified_by AS payment_verified_by,
+            pay.verified_at AS payment_verified_at, pay.payment_notes AS payment_notes
     FROM orders o
     JOIN users u ON u.id = o.user_id
     LEFT JOIN addresses a ON a.id = o.address_id
+    LEFT JOIN deliveries d ON d.order_id = o.id
+    LEFT JOIN users r ON r.id = d.delivery_person
     LEFT JOIN order_items oi ON oi.order_id = o.id
     LEFT JOIN (
       SELECT p1.* FROM payments p1
@@ -183,6 +188,14 @@ try {
         </div>
 
         <div class="mt-3 border rounded p-3">
+          <div class="small text-muted mb-2">Delivery</div>
+          <div class="d-flex justify-content-between small mb-1"><span>Rider</span><span id="orderRider">—</span></div>
+          <div class="d-flex justify-content-between small mb-1"><span>Dispatched</span><span id="orderDispatchTime">—</span></div>
+          <div class="d-flex justify-content-between small mb-1"><span>ETA</span><span id="orderEta">—</span></div>
+          <div class="d-flex justify-content-between small mb-1"><span>Delivered</span><span id="orderDeliveryDate">—</span></div>
+        </div>
+
+        <div class="mt-3 border rounded p-3">
           <div class="small text-muted mb-2">Ordered Items</div>
           <div class="table-responsive">
             <table class="table table-sm mb-0">
@@ -232,15 +245,16 @@ try {
         <div class="mt-3 border rounded p-3">
           <div class="small text-muted mb-2">Update Order Status</div>
           <div class="d-flex gap-2 flex-wrap">
-            <select class="form-select form-select-sm" id="adminStatusSelect" style="max-width:220px;">
-              <option value="Pending">Pending</option>
-              <option value="Paid">Paid</option>
-              <option value="Preparing">Preparing</option>
-              <option value="Out for Delivery">Out for Delivery</option>
-              <option value="Completed">Completed</option>
-              <option value="Cancelled">Cancelled</option>
-            </select>
-            <button type="button" class="btn btn-sm btn-success" id="btnAdminSaveStatus">Save Status</button>
+             <select class="form-select form-select-sm" id="adminStatusSelect" style="max-width:220px;">
+               <option value="Pending">Pending</option>
+               <option value="Paid">Paid</option>
+               <option value="Preparing">Preparing</option>
+               <option value="Out for Delivery">Out for Delivery</option>
+               <option value="Completed">Completed</option>
+               <option value="Cancelled">Cancelled</option>
+             </select>
+             <div class="small text-muted mt-1" id="adminStatusHelp"></div>
+             <button type="button" class="btn btn-sm btn-success" id="btnAdminSaveStatus">Save Status</button>
           </div>
         </div>
 
@@ -269,6 +283,12 @@ try {
 
   function money(value) {
     return '₱' + parseFloat(value || 0).toFixed(2);
+  }
+
+  function paymentStatusText(value) {
+    if (!value) return '—';
+    const text = String(value);
+    return text.charAt(0).toUpperCase() + text.slice(1);
   }
 
   const orderStatusBadgeClass = {
@@ -321,13 +341,13 @@ try {
         <span>Order Status</span><span class="badge ${orderBadge}">${escapeHtml(orderStatus)}</span>
       </div>
       <div class="d-flex justify-content-between small mb-1">
-        <span>Payment Status</span><span class="badge ${paymentStatusBadgeClass[order.payment_status] || 'bg-secondary'}">${escapeHtml(order.payment_status || '—')}</span>
+        <span>Payment Status</span><span class="badge ${paymentStatusBadgeClass[order.payment_status] || 'bg-secondary'}">${escapeHtml(paymentStatusText(order.payment_status))}</span>
       </div>
       <div class="d-flex justify-content-between small mb-1">
         <span>Subtotal</span><span>${money(subtotal)}</span>
       </div>
       <div class="d-flex justify-content-between small mb-1">
-        <span>Delivery</span><span>${money(deliveryFee)}</span>
+        <span>Delivery Fee</span><span>${money(deliveryFee)}</span>
       </div>
       <div class="d-flex justify-content-between small mb-1">
         <span>Total</span><span class="fw-bold">${money(totalAmount)}</span>
@@ -341,6 +361,18 @@ try {
 
     // Status select
     $modal.find('#adminStatusSelect').val(orderStatus);
+    const isDeliveryOrder = String(order.order_type) !== '0';
+    $modal.find('#adminStatusSelect option').prop('disabled', false);
+    $modal.find('#adminStatusHelp').text('');
+    if (isDeliveryOrder) {
+      $modal.find('#adminStatusSelect option[value="Out for Delivery"], #adminStatusSelect option[value="Completed"]').prop('disabled', true);
+      $modal.find('#adminStatusHelp').text('Delivery and completion statuses are managed on the Delivery page.');
+    }
+
+    $modal.find('#orderDispatchTime').text(order.delivery_dispatched_at ? String(order.delivery_dispatched_at).slice(0, 16).replace('T', ' ') : '—');
+    $modal.find('#orderEta').text(order.delivery_eta ? String(order.delivery_eta).slice(0, 16).replace('T', ' ') : '—');
+    $modal.find('#orderRider').text(order.rider_first_name ? ((order.rider_first_name || '') + ' ' + (order.rider_last_name || '')).trim() : 'Unassigned');
+    $modal.find('#orderDeliveryDate').text(order.delivery_delivered_at ? String(order.delivery_delivered_at).slice(0, 16).replace('T', ' ') : '—');
 
     // Ordered Items
     const $itemsBody = $modal.find('.items-table-body');
@@ -422,13 +454,39 @@ try {
     const order = currentViewOrder;
     if (!order) return;
 
+    // Clean up any orphaned backdrops before transitioning
+    $('.modal-backdrop').remove();
+    $('body').removeClass('modal-open').css('padding-right', '');
+
+    // Hide the view order modal to avoid stacked modals
+    const viewOrderModalEl = document.getElementById('viewOrderModal');
+    const viewOrderModalInstance = bootstrap.Modal.getInstance(viewOrderModalEl);
+    if (viewOrderModalInstance) {
+      viewOrderModalInstance.hide();
+    }
+
+    // Clean up backdrops after hiding view order modal
+    $('.modal-backdrop').remove();
+    $('body').removeClass('modal-open').css('padding-right', '');
+
+    // Flag that we came from view order modal
+    window._cameFromViewOrder = true;
+
     $('#receiptCustomer').text(((order.first_name || '') + ' ' + (order.last_name || '')).trim() || 'Customer');
     $('#receiptOrderId').text(order.order_number || ('#GB-' + String(order.id).padStart(6, '0')));
     $('#receiptMethod').text(order.payment_method || 'GCash');
     $('#receiptRefNo').text(order.payment_reference || '—');
     $('#receiptAmount').text(money(order.payment_amount || order.total_amount || 0));
     $('#receiptSubmitted').text(order.payment_verified_at || order.created_at || '—');
-    $('#receiptStatus').text(order.payment_status || '—');
+    $('#receiptStatus').text(paymentStatusText(order.payment_status));
+
+    // Show payment notes if present
+    if (order.payment_notes) {
+      $('#receiptNotes').text(order.payment_notes);
+      $('#receiptNotesRow').show();
+    } else {
+      $('#receiptNotesRow').hide();
+    }
 
     const receiptUrl = order.payment_receipt ? '../img/payments/' + escapeHtml(order.payment_receipt) : '';
     const $img = $('#receiptImage');
@@ -444,14 +502,42 @@ try {
     $('#verifyPaymentId').val(order.payment_id || '');
     $('#rejectPaymentId').val(order.payment_id || '');
 
+    // Clean up backdrops again before showing receipt modal
+    $('.modal-backdrop').remove();
+    $('body').removeClass('modal-open').css('padding-right', '');
+
     const modal = new bootstrap.Modal(document.getElementById('receiptModal'));
     modal.show();
   });
 
+  // Restore view order modal when receipt modal closes (only if we came from it)
+  $('#receiptModal').on('hidden.bs.modal', function () {
+    if (!window._cameFromViewOrder) return;
+    window._cameFromViewOrder = false;
+
+    // Clean up any orphaned backdrops
+    $('.modal-backdrop').remove();
+    $('body').removeClass('modal-open').css('padding-right', '');
+
+    const viewOrderModalEl = document.getElementById('viewOrderModal');
+    if (!viewOrderModalEl) return;
+
+    const instance = bootstrap.Modal.getInstance(viewOrderModalEl);
+    if (instance) {
+      instance.show();
+    } else {
+      new bootstrap.Modal(viewOrderModalEl).show();
+    }
+  });
+
   // Approve payment (shared handler)
   $(document).on('click', '#btnVerifyPayment', function () {
+    window._cameFromReceiptModal = false;
+    window._restoreViewOrderOnVerifyClose = false;
+    window._cameFromViewOrder = false;
     const paymentId = $('#verifyPaymentId').val();
     const remarks = $('#verifyNotes').val().trim();
+    const paymentNotes = $('#verifyNotes').val().trim();
     if (!paymentId) return;
 
     $.ajax({
@@ -463,6 +549,7 @@ try {
         payment_id: paymentId,
         payment_status: 'approved',
         remarks: remarks,
+        payment_notes: paymentNotes,
       },
       success: function (response) {
         if (response && response.success) {
@@ -484,10 +571,14 @@ try {
 
   // Reject payment (shared handler)
   $(document).on('click', '#btnRejectPayment', function () {
+    window._cameFromReceiptModal = false;
+    window._restoreViewOrderOnRejectClose = false;
+    window._cameFromViewOrder = false;
     const paymentId = $('#rejectPaymentId').val();
     const reason = $('#rejectReason').val();
     const notes = $('#rejectNotes').val().trim();
     const remarks = reason + (notes ? ' | ' + notes : '');
+    const paymentNotes = notes;
     if (!paymentId) return;
     if (!reason || reason === 'Choose reason') {
       alert('Please select a rejection reason.');
@@ -503,6 +594,7 @@ try {
         payment_id: paymentId,
         payment_status: 'rejected',
         remarks: remarks,
+        payment_notes: paymentNotes,
       },
       success: function (response) {
         if (response && response.success) {
@@ -556,15 +648,117 @@ try {
   // Open verify/reject modals from receipt modal buttons
   $(document).on('click', '.btn-approve-payment', function () {
     if (!currentViewOrder || !currentViewOrder.payment_id) return;
+
+    // Prevent receipt modal's close handler from restoring view order modal
+    window._cameFromViewOrder = false;
+
+    // Hide receipt modal to avoid stacked modals
+    const receiptModalEl = document.getElementById('receiptModal');
+    const receiptModalInstance = bootstrap.Modal.getInstance(receiptModalEl);
+    if (receiptModalInstance) {
+      receiptModalInstance.hide();
+    }
+
+    // Explicitly hide view order modal (may still be in "shown" state)
+    const viewOrderModalEl = document.getElementById('viewOrderModal');
+    const viewOrderModalInstance = bootstrap.Modal.getInstance(viewOrderModalEl);
+    if (viewOrderModalInstance) {
+      viewOrderModalInstance.hide();
+    }
+
+    // Clean up ALL backdrops
+    $('.modal-backdrop').remove();
+    $('body').removeClass('modal-open').css('padding-right', '');
+
+    // Flag: restore view order modal (NOT receipt) when verify modal closes
+    window._restoreViewOrderOnVerifyClose = true;
+    window._cameFromReceiptModal = false;
+
     $('#verifyPaymentId').val(currentViewOrder.payment_id);
     $('#verifyNotes').val('');
+
+    // Clean up backdrops again before showing verify modal
+    $('.modal-backdrop').remove();
+    $('body').removeClass('modal-open').css('padding-right', '');
+
     new bootstrap.Modal(document.getElementById('verifyPaymentModal')).show();
   });
   $(document).on('click', '.btn-reject-payment', function () {
     if (!currentViewOrder || !currentViewOrder.payment_id) return;
+
+    // Prevent receipt modal's close handler from restoring view order modal
+    window._cameFromViewOrder = false;
+
+    // Hide receipt modal to avoid stacked modals
+    const receiptModalEl = document.getElementById('receiptModal');
+    const receiptModalInstance = bootstrap.Modal.getInstance(receiptModalEl);
+    if (receiptModalInstance) {
+      receiptModalInstance.hide();
+    }
+
+    // Explicitly hide view order modal (may still be in "shown" state)
+    const viewOrderModalEl2 = document.getElementById('viewOrderModal');
+    const viewOrderModalInstance2 = bootstrap.Modal.getInstance(viewOrderModalEl2);
+    if (viewOrderModalInstance2) {
+      viewOrderModalInstance2.hide();
+    }
+
+    // Clean up ALL backdrops
+    $('.modal-backdrop').remove();
+    $('body').removeClass('modal-open').css('padding-right', '');
+
+    // Flag: restore view order modal (NOT receipt) when reject modal closes
+    window._restoreViewOrderOnRejectClose = true;
+    window._cameFromReceiptModal = false;
+
     $('#rejectPaymentId').val(currentViewOrder.payment_id);
     $('#rejectReason').val('Choose reason');
     $('#rejectNotes').val('');
+
+    // Clean up backdrops again before showing reject modal
+    $('.modal-backdrop').remove();
+    $('body').removeClass('modal-open').css('padding-right', '');
+
     new bootstrap.Modal(document.getElementById('rejectPaymentModal')).show();
+  });
+
+  // Restore view order modal when verify modal closes
+  $('#verifyPaymentModal').on('hidden.bs.modal', function () {
+    if (!window._restoreViewOrderOnVerifyClose) return;
+    window._restoreViewOrderOnVerifyClose = false;
+
+    // Clean up backdrops
+    $('.modal-backdrop').remove();
+    $('body').removeClass('modal-open').css('padding-right', '');
+
+    const viewOrderModalEl = document.getElementById('viewOrderModal');
+    if (!viewOrderModalEl) return;
+
+    const instance = bootstrap.Modal.getInstance(viewOrderModalEl);
+    if (instance) {
+      instance.show();
+    } else {
+      new bootstrap.Modal(viewOrderModalEl).show();
+    }
+  });
+
+  // Restore view order modal when reject modal closes
+  $('#rejectPaymentModal').on('hidden.bs.modal', function () {
+    if (!window._restoreViewOrderOnRejectClose) return;
+    window._restoreViewOrderOnRejectClose = false;
+
+    // Clean up backdrops
+    $('.modal-backdrop').remove();
+    $('body').removeClass('modal-open').css('padding-right', '');
+
+    const viewOrderModalEl = document.getElementById('viewOrderModal');
+    if (!viewOrderModalEl) return;
+
+    const instance = bootstrap.Modal.getInstance(viewOrderModalEl);
+    if (instance) {
+      instance.show();
+    } else {
+      new bootstrap.Modal(viewOrderModalEl).show();
+    }
   });
 </script>

@@ -179,24 +179,25 @@ The GCash payment verification flow is now implemented end-to-end for both custo
 
 ## 8. Delivery Management Status
 
-### Status: Not Implemented in Full
+### Status: Implemented (admin + rider)
 
 #### Included
 - Delivery page exists in the admin area
 - Delivery-related navigation is included
 - `order_type` (Delivery/Pickup) is captured and stored
+- Admin delivery table is dynamic with rider assignment
+- Rider dashboard (`gb/my_deliveries.php`) shows assigned deliveries
+- Delivery status updates create `deliveries` and `delivery_status_history` rows
+- Delivery progress syncs the linked order status
+- Rider ownership checks restrict updates to assigned deliveries
 
-#### Missing
-- Real assignment logic
-- Delivery person dashboard
-- Delivery status updates
-- Delivery history tracking
-- Failed-delivery reason handling
-- Restricting delivery staff to assigned deliveries only
+#### Remaining
 - Delivery assignment audit trail
+- Failed-delivery reason reporting polish
+- GPS tracking (out of scope for current build)
 
 ### Conclusion
-The delivery process is still at the design/UI stage and not yet a realistic working workflow.
+The delivery process is now functional for admin assignment and rider status updates.
 
 ---
 
@@ -249,7 +250,9 @@ Security is better than a basic prototype, but it is not yet strong enough for a
 #### Included
 - Database connection exists
 - Basic MySQL records are referenced in code
-- Tables in use: `users`, `addresses`, `categories`, `menu_items`, `orders`, `order_items`, `payments`, `order_status_history`
+- Tables in use: `users`, `addresses`, `categories`, `menu_items`, `orders`, `order_items`, `payments`, `order_status_history`, `deliveries`, `delivery_status_history`
+- `deliveries` and `delivery_status_history` are now used for assignment and tracking
+- A schema dump is available in `sql/schema.sql`
 - `order_type` column added to `orders` (0 = Pickup, 1 = Delivery)
 - `subtotal`, `delivery_fee`, `total_amount` stored on orders
 - Unit price snapshotted in `order_items`
@@ -304,11 +307,13 @@ The project has moved beyond a basic prototype. Customer ordering, GCash payment
 - GCash payment submission (QR + receipt upload)
 - Admin order management (dynamic table, view modal, status updates)
 - Admin payment verification (receipt viewing, approve/reject)
+- Admin delivery management and rider dashboard
 - Shared modal includes (GCash, payment receipt)
 - `order_type` (Delivery/Pickup) support
 
 #### What is still missing or incomplete
-- Delivery management and delivery person dashboard
+- Admin delivery management: dynamic table, rider assignment, delivery status updates
+- Rider dashboard: assigned deliveries, status updates, delivery details
 - Dashboard/reports with real data (still static)
 - Notifications and feedback system
 - CSRF protection and security hardening
@@ -322,7 +327,7 @@ Continue implementing in phases matching the roadmap:
 1. ✅ Cart + checkout (done)
 2. ✅ Order status tracking (done)
 3. ✅ Payment verification flow (done)
-4. Delivery assignments and tracking (next priority)
+4. ✅ Delivery assignments and tracking (done)
 5. Notifications, reports, and feedback
 6. Security hardening and validation
 7. Schema documentation, tests, and deployment prep
@@ -339,7 +344,7 @@ Status by phase:
 - Ordering flow: Implemented (customer-facing)
 - Admin dashboard: Partially complete (orders + payments functional)
 - Payment verification: Implemented (GCash flow)
-- Delivery management: Not complete
+- Delivery management: Implemented (admin + rider)
 - Security: Partially complete
 - Final project readiness: Not yet reached
 

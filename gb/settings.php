@@ -1,5 +1,6 @@
 <?php include '../includes/admin_header.php'; ?>
 <?php $isCustomer = ($_SESSION['user_data']['role'] ?? '') === 'customer'; ?>
+<?php $isAdmin = ($_SESSION['user_data']['role'] ?? '') === 'admin'; ?>
 <?php
 $customerAddresses = [];
 if ($isCustomer) {
@@ -11,6 +12,12 @@ if ($isCustomer) {
     $customerAddresses = $addressStmt->fetchAll(PDO::FETCH_ASSOC);
   }
 }
+
+if ($isAdmin) {
+    $settingsStmt = $conn->prepare("SELECT setting_key, setting_value, setting_type, description FROM system_settings ORDER BY setting_key");
+    $settingsStmt->execute();
+    $systemSettings = $settingsStmt->fetchAll(PDO::FETCH_ASSOC);
+}
 ?>
 
 <main class="main-content">
@@ -20,7 +27,9 @@ if ($isCustomer) {
       <div class="page-header d-flex justify-content-between align-items-center">
         <div>
           <h1 class="dashboard-heading">Settings</h1>
-          <?php if($isCustomer) : ?>
+          <?php if($isAdmin) : ?>
+                <p class="page-subtitle">Manage system settings.</p>
+            <?php elseif($isCustomer) : ?>
                 <p class="page-subtitle">Manage your delivery addresses.</p>
             <?php else : ?>
                 <p class="page-subtitle">Manage customer delivery addresses.</p>
@@ -70,6 +79,106 @@ if ($isCustomer) {
                 <?php endforeach; ?>
               <?php endif; ?>
             </div>
+          </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($isAdmin) : ?>
+        <div class="col-12">
+          <div class="table-card p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h4 class="fw-bold text-success mb-0">System Settings</h4>
+            </div>
+
+            <form action="../includes/actions.php" method="post" class="settings-form" enctype="multipart/form-data" id="systemSettingsForm">
+              <input type="hidden" name="form_type" value="update_setting">
+
+              <?php if (empty($systemSettings)) : ?>
+                <div class="text-center text-muted py-4">No system settings found.</div>
+              <?php else : ?>
+                <?php
+                  // Define desired field order (using actual DB keys)
+                  $fieldOrder = [
+                    'website_name',
+                    'website_tagline',
+                    'email',
+                    'contact_number',
+                    'delivery_fee',
+                    'gcash_qr_image_url',
+                    'order_auto_accept',
+                    'maintenance_mode',
+                  ];
+
+                  // Build lookup array keyed by setting_key
+                  $settingsLookup = [];
+                  foreach ($systemSettings as $setting) {
+                    $settingsLookup[$setting['setting_key']] = $setting;
+                  }
+
+                  $labelMap = [
+                    'website_name' => 'Website Name',
+                    'website_tagline' => 'Website Tagline',
+                    'email' => 'Email',
+                    'contact_number' => 'Contact Number',
+                    'delivery_fee' => 'Delivery Fee (PHP)',
+                    'gcash_qr_image_url' => 'Gcash QR Code',
+                    'order_auto_accept' => 'Auto-Accept Orders',
+                    'maintenance_mode' => 'Maintenance Mode',
+                  ];
+                ?>
+                <div class="row g-3">
+                  <?php foreach ($fieldOrder as $key) : ?>
+                    <?php
+                      if (!isset($settingsLookup[$key])) continue;
+                      $setting = $settingsLookup[$key];
+                      $value = $setting['setting_value'] ?? '';
+                      $type = $setting['setting_type'] ?? 'string';
+                      $desc = $setting['description'] ?? '';
+                      $isQr = $key === 'gcash_qr_image_url';
+                      $isPath = $key === 'gcash_qr_image_path';
+                      if ($isPath) continue;
+
+                      $label = $labelMap[$key] ?? ucwords(str_replace('_', ' ', $key));
+                    ?>
+
+                    <div class="col-6">
+                      <div class="mb-3">
+                        <label class="form-label"><?php echo htmlspecialchars($label); ?></label>
+
+                        <?php if ($isQr) : ?>
+                          <div class="d-flex align-items-center gap-3">
+                            <div class="bg-light rounded d-flex align-items-center justify-content-center" style="width:88px;height:88px;">
+                              <?php if (!empty($value)) : ?>
+                                <img src="<?php echo htmlspecialchars($value); ?>" alt="GCash QR" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" />
+                              <?php else : ?>
+                                <i class="fa-solid fa-qrcode fa-2x text-success"></i>
+                              <?php endif; ?>
+                            </div>
+                            <div>
+                              <div class="small fw-semibold mb-1">Current QR</div>
+                              <input type="file" name="<?php echo htmlspecialchars($key); ?>" class="form-control form-control-sm" accept="image/*" />
+                              <div class="form-text small text-muted mt-1">Upload PNG, JPG, or WEBP. Leave empty to keep current.</div>
+                            </div>
+                          </div>
+                        <?php elseif ($type === 'boolean') : ?>
+                          <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="<?php echo htmlspecialchars($key); ?>" id="setting_<?php echo htmlspecialchars($key); ?>" <?php echo ($value === '1') ? 'checked' : ''; ?> />
+                            <label class="form-check-label" for="setting_<?php echo htmlspecialchars($key); ?>"><?php echo ($value === '1') ? 'Enabled' : 'Disabled'; ?></label>
+                          </div>
+                        <?php else : ?>
+                          <input type="<?php echo ($type === 'number') ? 'number' : 'text'; ?>" name="<?php echo htmlspecialchars($key); ?>" class="form-control" value="<?php echo htmlspecialchars($value); ?>" <?php echo ($type === 'number') ? 'step="any" min="0"' : ''; ?> />
+                        <?php endif; ?>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
+                </div>
+
+                <div class="d-flex gap-2 mt-4">
+                  <button type="submit" name="update_setting" class="btn btn-primary-custom px-4 py-2 rounded-pill">Save Changes</button>
+                  <button type="button" class="btn btn-outline-secondary px-4 py-2 rounded-pill">Cancel</button>
+                </div>
+              <?php endif; ?>
+            </form>
           </div>
         </div>
         <?php endif; ?>
@@ -176,9 +285,9 @@ if ($isCustomer) {
             </div>
           </form>
         </div>
-      </div>
     </div>
   </div>
+</div>
 </main>
 
 <?php include '../includes/admin_footer.php'; ?>

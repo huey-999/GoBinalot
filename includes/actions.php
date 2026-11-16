@@ -1,7 +1,7 @@
 <?php
 
-include 'config.php';
-include 'auth.php';
+include_once 'config.php';
+include_once 'auth.php';
 
 function resolveUploadedMenuImage($fileTmp, $fileName, $uploadDir)
 {
@@ -163,6 +163,9 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'login') {
 
             if ($_SESSION['user_data']['role'] == 'admin') {
                 header("Location: ../gb/dashboard.php");
+                exit;
+            } elseif ($_SESSION['user_data']['role'] == 'rider') {
+                header("Location: ../gb/my_deliveries.php");
                 exit;
             } else {
                 header("Location: ../gb/my_orders.php");
@@ -1232,8 +1235,10 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'update_order_status')
         exit;
     }
 
+    // Delivery-related statuses for delivery orders are managed by delivery progress.
+
     try {
-        $current = $conn->prepare("SELECT order_status FROM orders WHERE id = :id");
+        $current = $conn->prepare("SELECT order_status, order_type FROM orders WHERE id = :id");
         $current->execute([':id' => $orderId]);
         $row = $current->fetch(PDO::FETCH_ASSOC);
 
@@ -1248,6 +1253,18 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'update_order_status')
             exit;
         }
 
+        if ((int) ($row['order_type'] ?? 0) === 1 && in_array($newStatus, ['Out for Delivery', 'Completed'], true)) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Delivery and completion statuses for delivery orders are managed on the Delivery page.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Delivery and completion statuses are managed on the Delivery page.'];
+            header("Location: ../gb/orders.php");
+            exit;
+        }
+
+        ensureDeliveryTables($conn);
         $conn->beginTransaction();
 
         $updateStmt = $conn->prepare("UPDATE orders SET order_status = :new_status WHERE id = :id");
@@ -1265,6 +1282,10 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'update_order_status')
             ':changed_by' => $userId,
             ':remarks' => $remarks,
         ]);
+
+        if ($newStatus === 'Out for Delivery' && (int) ($row['order_type'] ?? 0) === 1) {
+            ensureDeliveryRowForOrder($conn, $orderId, $userId, $remarks ?: 'Order moved to Out for Delivery');
+        }
 
         $conn->commit();
 
@@ -1609,6 +1630,7 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'verify_payment') {
     $paymentId = isset($_POST['payment_id']) ? (int) $_POST['payment_id'] : 0;
     $newStatus = trim($_POST['payment_status'] ?? '');
     $remarks = trim($_POST['remarks'] ?? '');
+    $paymentNotes = trim($_POST['payment_notes'] ?? '');
 
     if (!$paymentId || !$newStatus || !in_array($newStatus, ['approved', 'rejected'], true)) {
         if ($isAjax) {
@@ -1642,12 +1664,13 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'verify_payment') {
 
         $updateStmt = $conn->prepare("
             UPDATE payments
-            SET payment_status = :status, verified_by = :verified_by, verified_at = NOW()
+            SET payment_status = :status, verified_by = :verified_by, verified_at = NOW(), payment_notes = :payment_notes
             WHERE id = :id
         ");
         $updateStmt->execute([
             ':status' => $newStatus,
             ':verified_by' => $userId,
+            ':payment_notes' => $paymentNotes,
             ':id' => $paymentId,
         ]);
 
@@ -1837,6 +1860,179 @@ if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_order_payment') {
     }
 }
 
+// Get all system settings (admin only)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_settings') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userRole = $_SESSION['user_data']['role'] ?? 'customer';
+
+    if ($userRole !== 'admin') {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Admin access required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Admin access required.'];
+        header('Location: ../gb/settings.php');
+        exit;
+    }
+
+    try {
+        $statement = $conn->prepare("SELECT setting_key, setting_value, setting_type, description FROM system_settings ORDER BY setting_key");
+        $statement->execute();
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+        $settings = [];
+        foreach ($rows as $row) {
+            $settings[$row['setting_key']] = [
+                'value' => $row['setting_value'],
+                'type' => $row['setting_type'],
+                'description' => $row['description'],
+            ];
+        }
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'settings' => $settings]);
+            exit;
+        }
+
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid settings request.'];
+        header("Location: ../gb/settings.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while loading settings.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while loading settings.'];
+        header("Location: ../gb/settings.php");
+        exit;
+    }
+}
+
+// Update system settings (admin only) - bulk update from single form
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'update_setting') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userRole = $_SESSION['user_data']['role'] ?? 'customer';
+    $userId = $_SESSION['user_data']['id'] ?? 0;
+
+    if ($userRole !== 'admin') {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Admin access required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Admin access required.'];
+        header('Location: ../gb/settings.php');
+        exit;
+    }
+
+    try {
+        // Load existing settings to know types
+        $typeStmt = $conn->prepare("SELECT setting_key, setting_type FROM system_settings");
+        $typeStmt->execute();
+        $settingTypes = [];
+        foreach ($typeStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $settingTypes[$row['setting_key']] = $row['setting_type'];
+        }
+
+        $uploadDir = __DIR__ . '/../img/settings';
+        $updated = [];
+        $failed = [];
+
+        // Process file uploads first (inject into $_POST as value)
+        foreach ($_FILES as $fieldName => $fileInfo) {
+            if (!isset($settingTypes[$fieldName])) continue;
+            if ($fileInfo['error'] === UPLOAD_ERR_OK) {
+                $imageFileName = resolveUploadedMenuImage($fileInfo['tmp_name'], $fileInfo['name'], $uploadDir);
+                if ($imageFileName) {
+                    $_POST[$fieldName] = '../img/settings/' . $imageFileName;
+                }
+            }
+        }
+
+        // Process all POST fields as settings
+        foreach ($_POST as $key => $value) {
+            if ($key === 'form_type') continue;
+            if (!isset($settingTypes[$key])) continue;
+
+            $settingType = $settingTypes[$key];
+            $settingValue = $value;
+
+            // Handle booleans: unchecked checkboxes won't be in POST
+            if ($settingType === 'boolean') {
+                $settingValue = (in_array($value, ['1', 'on', 'true'], true)) ? '1' : '0';
+            }
+
+            $upsert = $conn->prepare("
+                INSERT INTO system_settings (setting_key, setting_value, setting_type, updated_by, updated_at)
+                VALUES (:setting_key, :setting_value, :setting_type, :updated_by, NOW())
+                ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), setting_type = VALUES(setting_type), updated_by = VALUES(updated_by), updated_at = NOW()
+            ");
+            $result = $upsert->execute([
+                ':setting_key' => $key,
+                ':setting_value' => $settingValue,
+                ':setting_type' => $settingType,
+                ':updated_by' => $userId,
+            ]);
+
+            if ($result) {
+                $updated[] = $key;
+            } else {
+                $failed[] = $key;
+            }
+        }
+
+        // Handle unchecked boolean fields (default to 0)
+        foreach ($settingTypes as $key => $settingType) {
+            if ($settingType === 'boolean' && !isset($_POST[$key])) {
+                $upsert = $conn->prepare("
+                    INSERT INTO system_settings (setting_key, setting_value, setting_type, updated_by, updated_at)
+                    VALUES (:setting_key, :setting_value, :setting_type, :updated_by, NOW())
+                    ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by), updated_at = NOW()
+                ");
+                $upsert->execute([
+                    ':setting_key' => $key,
+                    ':setting_value' => '0',
+                    ':setting_type' => $settingType,
+                    ':updated_by' => $userId,
+                ]);
+            }
+        }
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => empty($failed),
+                'message' => count($updated) > 0 ? 'Settings updated successfully!' : 'No settings were updated.',
+                'updated' => $updated,
+                'failed' => $failed,
+            ]);
+            exit;
+        }
+
+        if (count($updated) > 0) {
+            $_SESSION['toast'] = ['type' => 'success', 'message' => 'Settings updated successfully!'];
+        } else {
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'No settings were updated.'];
+        }
+        header("Location: ../gb/settings.php");
+        exit;
+
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while saving the settings.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while saving the settings.'];
+        header("Location: ../gb/settings.php");
+        exit;
+    }
+}
+
 function tableHasColumn($tableName, $columnName)
 {
     global $conn;
@@ -1876,4 +2072,811 @@ function normalizeCategoryStatusValue($value)
 function categoryStatusColumnName()
 {
     return 'status';
+}
+
+// ----- Delivery management helpers and handlers -----
+
+function ensureDeliveryTables($conn)
+{
+    if (!empty($GLOBALS['delivery_tables_ensured'])) {
+        return;
+    }
+
+    $conn->exec("CREATE TABLE IF NOT EXISTS deliveries (
+        order_id INT NOT NULL,
+        delivery_person INT NULL,
+        delivery_status VARCHAR(50) NOT NULL DEFAULT 'pending_dispatch',
+        dispatched_at DATETIME NULL,
+        picked_up_at DATETIME NULL,
+        out_for_delivery_at DATETIME NULL,
+        delivered_at DATETIME NULL,
+        eta DATETIME NULL,
+        failure_reason VARCHAR(255) NULL,
+        notes TEXT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_deliveries_order (order_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $conn->exec("CREATE TABLE IF NOT EXISTS delivery_status_history (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        delivery_id INT NOT NULL,
+        old_status VARCHAR(50) NULL,
+        new_status VARCHAR(50) NOT NULL,
+        changed_by INT NULL,
+        remarks VARCHAR(255) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $existingColumns = [];
+    foreach ($conn->query("SHOW COLUMNS FROM deliveries")->fetchAll(PDO::FETCH_ASSOC) as $column) {
+        $existingColumns[$column['Field']] = true;
+    }
+
+    $alterations = [];
+    if (!isset($existingColumns['delivery_person'])) {
+        $alterations[] = "ADD COLUMN delivery_person INT NULL";
+    }
+    if (isset($existingColumns['delivery_person'])) {
+        $alterations[] = "MODIFY COLUMN delivery_person INT NULL";
+    }
+    if (!isset($existingColumns['picked_up_at'])) {
+        $alterations[] = "ADD COLUMN picked_up_at DATETIME NULL";
+    }
+    if (!isset($existingColumns['out_for_delivery_at'])) {
+        $alterations[] = "ADD COLUMN out_for_delivery_at DATETIME NULL";
+    }
+    if (!isset($existingColumns['eta'])) {
+        $alterations[] = "ADD COLUMN eta DATETIME NULL";
+    }
+    if (!isset($existingColumns['failure_reason'])) {
+        $alterations[] = "ADD COLUMN failure_reason VARCHAR(255) NULL";
+    }
+    if (!isset($existingColumns['notes'])) {
+        $alterations[] = "ADD COLUMN notes TEXT NULL";
+    }
+    if (!isset($existingColumns['created_at'])) {
+        $alterations[] = "ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP";
+    }
+    if (!isset($existingColumns['updated_at'])) {
+        $alterations[] = "ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP";
+    }
+
+    // Map legacy dispatched_at if present; keep it as the assignment timestamp.
+    if (!isset($existingColumns['dispatched_at'])) {
+        $alterations[] = "ADD COLUMN dispatched_at DATETIME NULL";
+    }
+
+    if (!empty($alterations)) {
+        $conn->exec("ALTER TABLE deliveries " . implode(", ", $alterations));
+    }
+
+    $col = $conn->query("SHOW COLUMNS FROM users LIKE 'is_active'")->fetch(PDO::FETCH_ASSOC);
+    if (!$col) {
+        $conn->exec("ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1");
+    }
+
+    $GLOBALS['delivery_tables_ensured'] = true;
+}
+
+function ensureDeliveryRowForOrder($conn, $orderId, $changedBy, $remarks)
+{
+    ensureDeliveryTables($conn);
+
+    $stmt = $conn->prepare("SELECT id, delivery_status, delivery_person FROM deliveries WHERE order_id = :order_id");
+    $stmt->execute([':order_id' => $orderId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($row) {
+        return $row;
+    }
+
+    $insert = $conn->prepare("INSERT INTO deliveries (order_id, delivery_status, created_at, updated_at) VALUES (:order_id, 'pending_dispatch', NOW(), NOW())");
+    $insert->execute([':order_id' => $orderId]);
+    $deliveryId = (int) $conn->lastInsertId();
+
+    $history = $conn->prepare("INSERT INTO delivery_status_history (delivery_id, old_status, new_status, changed_by, remarks, created_at)
+                               VALUES (:delivery_id, '', 'pending_dispatch', :changed_by, :remarks, NOW())");
+    $history->execute([
+        ':delivery_id' => $deliveryId,
+        ':changed_by' => $changedBy,
+        ':remarks' => $remarks,
+    ]);
+
+    return ['id' => $deliveryId, 'delivery_status' => 'pending_dispatch', 'delivery_person' => null];
+}
+
+function isAdminUser()
+{
+    return (($_SESSION['user_data']['role'] ?? '') === 'admin');
+}
+
+// Get riders (admin)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_riders') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId || !isAdminUser()) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Admin access required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Admin access required.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    try {
+        ensureDeliveryTables($conn);
+        $stmt = $conn->prepare("SELECT id, first_name, last_name, email, phone, is_active, created_at FROM users WHERE role = 'rider' ORDER BY first_name, last_name");
+        $stmt->execute();
+        $riders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'riders' => $riders]);
+            exit;
+        }
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while fetching riders.']);
+            exit;
+        }
+    }
+}
+
+// Add rider (admin)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'add_rider') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId || !isAdminUser()) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Admin access required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Admin access required.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    $firstName = trim($_POST['first_name'] ?? '');
+    $lastName = trim($_POST['last_name'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
+    $password = $_POST['password'] ?? '';
+
+    if ($firstName === '' || $lastName === '' || $email === '' || $password === '') {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'First name, last name, email, and password are required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid rider data.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    try {
+        ensureDeliveryTables($conn);
+        $check = $conn->prepare("SELECT id FROM users WHERE email = :email");
+        $check->execute([':email' => $email]);
+        if ($check->fetch()) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Email is already in use.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Email is already in use.'];
+            header('Location: ../gb/deliveries.php');
+            exit;
+        }
+
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $stmt = $conn->prepare("INSERT INTO users (first_name, last_name, email, password, phone, role, is_active, created_at)
+                                VALUES (:first_name, :last_name, :email, :password, :phone, 'rider', 1, NOW())");
+        $stmt->execute([
+            ':first_name' => $firstName,
+            ':last_name' => $lastName,
+            ':email' => $email,
+            ':password' => $hash,
+            ':phone' => $phone,
+        ]);
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => 'Rider created successfully.', 'rider_id' => $conn->lastInsertId()]);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'success', 'message' => 'Rider created successfully.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while creating the rider.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while creating the rider.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+}
+
+// Update rider (admin)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'update_rider') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId || !isAdminUser()) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Admin access required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Admin access required.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    $riderId = isset($_POST['rider_id']) ? (int) $_POST['rider_id'] : 0;
+    $firstName = trim($_POST['first_name'] ?? '');
+    $lastName = trim($_POST['last_name'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
+
+    if (!$riderId || $firstName === '' || $lastName === '' || $email === '') {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Rider, first name, last name, and email are required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid rider data.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    try {
+        ensureDeliveryTables($conn);
+        $stmt = $conn->prepare("UPDATE users SET first_name = :first_name, last_name = :last_name, email = :email, phone = :phone WHERE id = :id AND role = 'rider'");
+        $stmt->execute([
+            ':first_name' => $firstName,
+            ':last_name' => $lastName,
+            ':email' => $email,
+            ':phone' => $phone,
+            ':id' => $riderId,
+        ]);
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => 'Rider updated successfully.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'success', 'message' => 'Rider updated successfully.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while updating the rider.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while updating the rider.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+}
+
+// Toggle rider active state (admin)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'toggle_rider') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId || !isAdminUser()) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Admin access required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Admin access required.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    $riderId = isset($_POST['rider_id']) ? (int) $_POST['rider_id'] : 0;
+    $isActive = isset($_POST['is_active']) ? (int) $_POST['is_active'] : 0;
+
+    if (!$riderId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Rider ID is required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid rider.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    try {
+        ensureDeliveryTables($conn);
+        $stmt = $conn->prepare("UPDATE users SET is_active = :is_active WHERE id = :id AND role = 'rider'");
+        $stmt->execute([':is_active' => $isActive ? 1 : 0, ':id' => $riderId]);
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => 'Rider status updated.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'success', 'message' => 'Rider status updated.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while updating the rider.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while updating the rider.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+}
+
+// Get deliveries (admin)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_deliveries') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId || !isAdminUser()) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Admin access required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Admin access required.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    try {
+        ensureDeliveryTables($conn);
+        $sql = "SELECT d.id, d.order_id, d.delivery_person, d.delivery_status, d.dispatched_at, d.picked_up_at,
+                       d.out_for_delivery_at, d.delivered_at, d.eta, d.failure_reason, d.notes, d.created_at,
+                       o.order_number, o.order_type, o.order_status, o.total_amount, o.address_id,
+                        u.first_name AS customer_first_name, u.last_name AS customer_last_name, a.contact_number AS customer_phone,
+                       r.first_name AS rider_first_name, r.last_name AS rider_last_name, r.phone AS rider_phone,
+                       a.address AS delivery_address
+                FROM deliveries d
+                JOIN orders o ON o.id = d.order_id
+                JOIN users u ON u.id = o.user_id
+                LEFT JOIN users r ON r.id = d.delivery_person
+                LEFT JOIN addresses a ON a.id = o.address_id
+                ORDER BY d.created_at DESC";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute();
+        $deliveries = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'deliveries' => $deliveries]);
+            exit;
+        }
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while fetching deliveries.']);
+            exit;
+        }
+    }
+}
+
+// Get delivery details (admin)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'get_delivery') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId || (!isAdminUser() && (($_SESSION['user_data']['role'] ?? '') !== 'rider'))) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Admin access required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Admin access required.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    $deliveryId = isset($_POST['delivery_id']) ? (int) $_POST['delivery_id'] : 0;
+    if (!$deliveryId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Delivery ID is required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid delivery.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    try {
+        ensureDeliveryTables($conn);
+        $sql = "SELECT d.*, o.order_number, o.order_type, o.order_status, o.total_amount, o.subtotal, o.delivery_fee,
+                        u.first_name AS customer_first_name, u.last_name AS customer_last_name, a.contact_number AS customer_phone,
+                       r.first_name AS rider_first_name, r.last_name AS rider_last_name, r.phone AS rider_phone,
+                       a.address AS delivery_address
+                FROM deliveries d
+                JOIN orders o ON o.id = d.order_id
+                JOIN users u ON u.id = o.user_id
+                LEFT JOIN users r ON r.id = d.delivery_person
+                LEFT JOIN addresses a ON a.id = o.address_id
+                WHERE d.id = :id";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute([':id' => $deliveryId]);
+        $delivery = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$delivery) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Delivery not found.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Delivery not found.'];
+            header('Location: ../gb/my_deliveries.php');
+            exit;
+        }
+
+        $userRole = $_SESSION['user_data']['role'] ?? '';
+        if ($userRole === 'rider' && (int) ($delivery['delivery_person'] ?? 0) !== (int) $userId) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'You can only view your assigned deliveries.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Access denied.'];
+            header('Location: ../gb/my_deliveries.php');
+            exit;
+        }
+
+        $itemsStmt = $conn->prepare("SELECT item_name, quantity, unit_price, subtotal FROM order_items WHERE order_id = :order_id ORDER BY id");
+        $itemsStmt->execute([':order_id' => $delivery['order_id']]);
+        $items = $itemsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'delivery' => $delivery, 'items' => $items]);
+            exit;
+        }
+    } catch (\PDOException $e) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while fetching delivery details.']);
+            exit;
+        }
+    }
+}
+
+// Assign rider to delivery (admin)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'assign_delivery') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId || !isAdminUser()) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Admin access required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Admin access required.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    $orderId = isset($_POST['order_id']) ? (int) $_POST['order_id'] : 0;
+    $riderId = isset($_POST['rider_id']) ? (int) $_POST['rider_id'] : 0;
+    $eta = trim($_POST['eta'] ?? '');
+    $notes = trim($_POST['notes'] ?? '');
+
+    if (!$orderId || !$riderId) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Order and rider are required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid assignment data.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    try {
+        ensureDeliveryTables($conn);
+        $conn->beginTransaction();
+
+        $orderStmt = $conn->prepare("SELECT id, order_type, order_status FROM orders WHERE id = :id");
+        $orderStmt->execute([':id' => $orderId]);
+        $order = $orderStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$order || (int) $order['order_type'] !== 1) {
+            $conn->rollBack();
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Order is not a delivery order.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Order is not a delivery order.'];
+            header('Location: ../gb/deliveries.php');
+            exit;
+        }
+
+        $riderStmt = $conn->prepare("SELECT id FROM users WHERE id = :id AND role = 'rider' AND is_active = 1");
+        $riderStmt->execute([':id' => $riderId]);
+        if (!$riderStmt->fetch()) {
+            $conn->rollBack();
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Rider is not available.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Rider is not available.'];
+            header('Location: ../gb/deliveries.php');
+            exit;
+        }
+
+        $existingStmt = $conn->prepare("SELECT id, delivery_status FROM deliveries WHERE order_id = :order_id");
+        $existingStmt->execute([':order_id' => $orderId]);
+        $existing = $existingStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($existing) {
+            $oldStatus = $existing['delivery_status'];
+            $update = $conn->prepare("UPDATE deliveries
+                                      SET delivery_person = :rider_id,
+                                          delivery_status = 'assigned',
+                                          dispatched_at = NOW(),
+                                          eta = :eta,
+                                          notes = :notes,
+                                          updated_at = NOW()
+                                      WHERE id = :id");
+            $update->execute([
+                ':rider_id' => $riderId,
+                ':eta' => $eta !== '' ? $eta : null,
+                ':notes' => $notes,
+                ':id' => $existing['id'],
+            ]);
+            $deliveryId = (int) $existing['id'];
+        } else {
+            $oldStatus = '';
+            $insert = $conn->prepare("INSERT INTO deliveries (order_id, delivery_person, delivery_status, dispatched_at, eta, notes, created_at, updated_at)
+                                      VALUES (:order_id, :rider_id, 'assigned', NOW(), :eta, :notes, NOW(), NOW())");
+            $insert->execute([
+                ':order_id' => $orderId,
+                ':rider_id' => $riderId,
+                ':eta' => $eta !== '' ? $eta : null,
+                ':notes' => $notes,
+            ]);
+            $deliveryId = (int) $conn->lastInsertId();
+        }
+
+        $hist = $conn->prepare("INSERT INTO delivery_status_history (delivery_id, old_status, new_status, changed_by, remarks, created_at)
+                                VALUES (:delivery_id, :old_status, 'assigned', :changed_by, :remarks, NOW())");
+        $hist->execute([
+            ':delivery_id' => $deliveryId,
+            ':old_status' => $oldStatus,
+            ':changed_by' => $userId,
+            ':remarks' => $notes !== '' ? $notes : 'Rider assigned',
+        ]);
+
+        if ($order['order_status'] !== 'Out for Delivery') {
+            $updOrder = $conn->prepare("UPDATE orders SET order_status = 'Out for Delivery' WHERE id = :id");
+            $updOrder->execute([':id' => $orderId]);
+
+            $orderHist = $conn->prepare("INSERT INTO order_status_history (order_id, old_status, new_status, changed_by, remarks, created_at)
+                                         VALUES (:order_id, :old_status, 'Out for Delivery', :changed_by, :remarks, NOW())");
+            $orderHist->execute([
+                ':order_id' => $orderId,
+                ':old_status' => $order['order_status'],
+                ':changed_by' => $userId,
+                ':remarks' => $notes !== '' ? $notes : 'Rider assigned',
+            ]);
+        }
+
+        $conn->commit();
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => 'Rider assigned successfully.', 'delivery_id' => $deliveryId]);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'success', 'message' => 'Rider assigned successfully.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    } catch (\PDOException $e) {
+        $conn->rollBack();
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while assigning the rider.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while assigning the rider.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+}
+
+// Update delivery status (admin)
+if (isset($_POST['form_type']) && $_POST['form_type'] === 'update_delivery_status') {
+    $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    $userId = getCurrentUserId();
+
+    if (!$userId || (!isAdminUser() && (($_SESSION['user_data']['role'] ?? '') !== 'rider'))) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Admin access required.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Admin access required.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    $deliveryId = isset($_POST['delivery_id']) ? (int) $_POST['delivery_id'] : 0;
+    $newStatus = trim($_POST['delivery_status'] ?? '');
+    $failureReason = trim($_POST['failure_reason'] ?? '');
+    $notes = trim($_POST['notes'] ?? '');
+
+    $allowedStatuses = ['pending_dispatch', 'assigned', 'picked_up', 'out_for_delivery', 'delivered', 'cancelled'];
+    $transitions = [
+        'pending_dispatch' => ['assigned', 'cancelled'],
+        'assigned' => ['picked_up', 'cancelled'],
+        'picked_up' => ['out_for_delivery', 'cancelled'],
+        'out_for_delivery' => ['delivered', 'cancelled'],
+        'delivered' => [],
+        'cancelled' => [],
+    ];
+
+    if (!$deliveryId || !in_array($newStatus, $allowedStatuses, true)) {
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Invalid delivery status data.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid delivery status data.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
+
+    try {
+        ensureDeliveryTables($conn);
+        $conn->beginTransaction();
+
+        $stmt = $conn->prepare("SELECT d.id, d.order_id, d.delivery_person, d.delivery_status, o.order_status FROM deliveries d JOIN orders o ON o.id = d.order_id WHERE d.id = :id");
+        $stmt->execute([':id' => $deliveryId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            $conn->rollBack();
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Delivery not found.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Delivery not found.'];
+            header('Location: ../gb/deliveries.php');
+            exit;
+        }
+
+        $userRole = $_SESSION['user_data']['role'] ?? '';
+        if ($userRole === 'rider' && (int) ($row['delivery_person'] ?? 0) !== (int) $userId) {
+            $conn->rollBack();
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'You can only update your assigned deliveries.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Access denied.'];
+            header('Location: ../gb/my_deliveries.php');
+            exit;
+        }
+
+        $oldStatus = $row['delivery_status'];
+        if ($oldStatus === $newStatus) {
+            $conn->rollBack();
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => true, 'message' => 'Delivery status unchanged.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'success', 'message' => 'Delivery status unchanged.'];
+            header('Location: ../gb/deliveries.php');
+            exit;
+        }
+
+        if (!in_array($newStatus, $transitions[$oldStatus] ?? [], true)) {
+            $conn->rollBack();
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Invalid delivery status transition.']);
+                exit;
+            }
+            $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Invalid delivery status transition.'];
+            header('Location: ../gb/deliveries.php');
+            exit;
+        }
+
+        $timestampField = null;
+        if ($newStatus === 'picked_up') {
+            $timestampField = 'picked_up_at';
+        } elseif ($newStatus === 'out_for_delivery') {
+            $timestampField = 'out_for_delivery_at';
+        } elseif ($newStatus === 'delivered') {
+            $timestampField = 'delivered_at';
+        }
+
+        $sql = "UPDATE deliveries SET delivery_status = :status, failure_reason = :failure_reason, notes = COALESCE(NULLIF(:notes, ''), notes), updated_at = NOW()";
+        if ($timestampField) {
+            $sql .= ", {$timestampField} = NOW()";
+        }
+        $sql .= " WHERE id = :id";
+        $update = $conn->prepare($sql);
+        $update->execute([
+            ':status' => $newStatus,
+            ':failure_reason' => $newStatus === 'cancelled' ? ($failureReason !== '' ? $failureReason : 'Cancelled') : $failureReason,
+            ':notes' => $notes,
+            ':id' => $deliveryId,
+        ]);
+
+        $hist = $conn->prepare("INSERT INTO delivery_status_history (delivery_id, old_status, new_status, changed_by, remarks, created_at)
+                                VALUES (:delivery_id, :old_status, :new_status, :changed_by, :remarks, NOW())");
+        $hist->execute([
+            ':delivery_id' => $deliveryId,
+            ':old_status' => $oldStatus,
+            ':new_status' => $newStatus,
+            ':changed_by' => $userId,
+            ':remarks' => $notes !== '' ? $notes : $failureReason,
+        ]);
+
+        $orderStatus = $row['order_status'];
+        $targetOrderStatus = null;
+        if (in_array($newStatus, ['pending_dispatch', 'assigned', 'picked_up', 'out_for_delivery'], true)) {
+            $targetOrderStatus = 'Out for Delivery';
+        } elseif ($newStatus === 'delivered') {
+            $targetOrderStatus = 'Completed';
+        } elseif ($newStatus === 'cancelled') {
+            $targetOrderStatus = 'Cancelled';
+        }
+
+        if ($targetOrderStatus && $orderStatus !== $targetOrderStatus) {
+            $updOrder = $conn->prepare("UPDATE orders SET order_status = :status WHERE id = :id");
+            $updOrder->execute([':status' => $targetOrderStatus, ':id' => $row['order_id']]);
+
+            $orderHist = $conn->prepare("INSERT INTO order_status_history (order_id, old_status, new_status, changed_by, remarks, created_at)
+                                         VALUES (:order_id, :old_status, :new_status, :changed_by, :remarks, NOW())");
+            $orderHist->execute([
+                ':order_id' => $row['order_id'],
+                ':old_status' => $orderStatus,
+                ':new_status' => $targetOrderStatus,
+                ':changed_by' => $userId,
+                ':remarks' => $notes !== '' ? $notes : 'Delivery status updated',
+            ]);
+        }
+
+        $conn->commit();
+
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => 'Delivery status updated successfully.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'success', 'message' => 'Delivery status updated successfully.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    } catch (\PDOException $e) {
+        $conn->rollBack();
+        if ($isAjax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Something went wrong while updating the delivery status.']);
+            exit;
+        }
+        $_SESSION['toast'] = ['type' => 'danger', 'message' => 'Something went wrong while updating the delivery status.'];
+        header('Location: ../gb/deliveries.php');
+        exit;
+    }
 }
