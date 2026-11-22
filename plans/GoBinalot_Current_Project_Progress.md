@@ -190,6 +190,11 @@ The GCash payment verification flow is now implemented end-to-end for both custo
 - Delivery status updates create `deliveries` and `delivery_status_history` rows
 - Delivery progress syncs the linked order status
 - Rider ownership checks restrict updates to assigned deliveries
+- Rider "Cancel Delivery" opens a confirmation modal containing the Failure Reason field (only on cancel)
+- Rider Notes displayed as read-only text in Delivery Summary section
+- Rider status section hidden when no action buttons are available
+- Admin order Actions section hidden when no status buttons/links are available
+- Admin order modal payment status badge capitalizes first letter (e.g., "Approved")
 
 #### Remaining
 - Delivery assignment audit trail

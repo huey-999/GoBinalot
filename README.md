@@ -44,6 +44,16 @@ The app is not yet production-ready (delivery management, reports, notifications
 - Shared receipt modal include (`includes/payment_receipt_modal.php`) reused by payments and orders.
 - `get_order_items` and `get_order_payment` endpoints (role-aware ownership checks).
 
+## Recent additions (delivery & rider workflow)
+
+- Admin delivery management (`gb/deliveries.php`): dynamic table with rider assignment.
+- Rider dashboard (`gb/my_deliveries.php`): assigned deliveries, status updates, delivery details.
+- Rider "Cancel Delivery" opens a confirmation modal containing the Failure Reason field (shown only on cancel).
+- Rider Notes displayed as read-only text in Delivery Summary section.
+- Admin order modal payment status badge capitalizes first letter (e.g., "Approved").
+- Rider status section hidden when no action buttons are available.
+- Admin order Actions section hidden when no status buttons/links are available.
+
 ## What is working
 
 - PHP page structure and navigation are organized and consistent
@@ -57,6 +67,10 @@ The app is not yet production-ready (delivery management, reports, notifications
 - Customer ordering flow: cart → checkout (Delivery/Pickup) → place order → GCash payment (QR + receipt upload) → order tracking (`gb/my_orders.php`)
 - Admin order management: dynamic table, view-order modal, inline GCash verification, status updates (`gb/orders.php`)
 - Admin payment verification: dynamic queue, receipt viewing, approve/reject (`gb/payments.php`)
+- Admin delivery management: dynamic delivery table, rider assignment (`gb/deliveries.php`)
+- Rider dashboard: assigned deliveries, status updates, delivery details (`gb/my_deliveries.php`)
+- Rider cancel delivery with confirmation modal containing Failure Reason field
+- Rider Notes displayed as read-only text in Delivery Summary
 
 ## What still needs cleanup before the app is considered complete
 

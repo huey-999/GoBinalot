@@ -1,4 +1,5 @@
 <?php include '../includes/admin_header.php'; ?>
+<?php if (empty($_SESSION['csrf_token'])) { $_SESSION['csrf_token'] = bin2hex(random_bytes(32)); } ?>
 
 <main class="main-content">
   <div class="tab-content">
@@ -13,29 +14,29 @@
       <div class="row g-3 mb-3">
         <div class="col-sm-6 col-xl-3">
           <div class="stat-card p-3">
-            <span class="text-muted small fw-semibold">Pending Verification</span>
-            <h4 class="fw-bold text-dark mt-1 mb-0" id="statPending">12</h4>
+    <span class="text-muted small fw-semibold">Pending Verification</span>
+    <h4 class="fw-bold text-dark mt-1 mb-0" id="statPending">0</h4>
           </div>
         </div>
 
         <div class="col-sm-6 col-xl-3">
           <div class="stat-card p-3">
-            <span class="text-muted small fw-semibold">Approved Today</span>
-            <h4 class="fw-bold text-dark mt-1 mb-0" id="statApproved">28</h4>
+    <span class="text-muted small fw-semibold">Approved Today</span>
+    <h4 class="fw-bold text-dark mt-1 mb-0" id="statApproved">0</h4>
           </div>
         </div>
 
         <div class="col-sm-6 col-xl-3">
           <div class="stat-card p-3">
-            <span class="text-muted small fw-semibold">Rejected Today</span>
-            <h4 class="fw-bold text-dark mt-1 mb-0" id="statRejected">4</h4>
+    <span class="text-muted small fw-semibold">Rejected Today</span>
+    <h4 class="fw-bold text-dark mt-1 mb-0" id="statRejected">0</h4>
           </div>
         </div>
 
         <div class="col-sm-6 col-xl-3">
           <div class="stat-card p-3">
-            <span class="text-muted small fw-semibold">Total Receipts</span>
-            <h4 class="fw-bold text-dark mt-1 mb-0" id="statTotal">146</h4>
+    <span class="text-muted small fw-semibold">Total Receipts</span>
+    <h4 class="fw-bold text-dark mt-1 mb-0" id="statTotal">0</h4>
           </div>
         </div>
       </div>
@@ -47,7 +48,7 @@
         </div>
 
         <div class="table-responsive">
-          <table class="table table-hover align-middle table-sm mb-0 datatable-table">
+          <table id="payments-table" class="table table-hover align-middle table-sm mb-0 datatable-table">
             <thead class="table-light">
               <tr>
                 <th>Order ID</th>
@@ -63,7 +64,8 @@
             </thead>
             <tbody id="paymentsTableBody">
               <tr>
-                <td colspan="9" class="text-center text-muted small py-4">Loading payments...</td>
+                <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+                <td class="text-center text-muted small py-4">Loading payments...</td>
               </tr>
             </tbody>
           </table>
@@ -78,6 +80,7 @@
 <?php include '../includes/admin_footer.php'; ?>
 
 <script>
+  const CSRF_TOKEN = <?= json_encode($_SESSION['csrf_token'] ?? '') ?>;
   function escapeHtml(text) {
     return String(text)
       .replace(/&/g, '&amp;')
@@ -103,29 +106,77 @@
     rejected: 'bg-danger',
   };
 
+  const dtOptions = {
+    paging: true,
+    searching: true,
+    ordering: true,
+    info: true,
+    pageLength: 10,
+    lengthMenu: [[5, 10, 25, 50, -1], [5, 10, 25, 50, 'All']],
+    language: {
+      search: '',
+      searchPlaceholder: 'Search records...',
+      lengthMenu: 'Show _MENU_',
+      info: 'Showing _START_ to _END_ of _TOTAL_ entries',
+      paginate: {
+        previous: 'Prev',
+        next: 'Next'
+      }
+    },
+    initComplete: function () {
+      const table = this.api();
+      const $container = $(table.table().container());
+      $container.find('.dataTables_filter input').addClass('form-control form-control-sm');
+      $container.find('.dataTables_length select').addClass('form-select form-select-sm');
+    }
+  };
+
+  function initPaymentsTable() {
+    if (window.jQuery && $.fn.DataTable) {
+      try {
+        $('#payments-table').DataTable(dtOptions);
+      } catch (e) {}
+    }
+  }
+
   const $tableBody = $('#paymentsTableBody');
 
   function loadPayments() {
-    $tableBody.html('<tr><td colspan="9" class="text-center text-muted small py-4">Loading payments...</td></tr>');
+        $tableBody.html('<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="text-center text-muted small py-4">Loading payments...</td></tr>');
 
-    $.ajax({
-      url: '../includes/actions.php',
-      type: 'POST',
-      dataType: 'json',
-      data: { form_type: 'get_payments' },
-      success: function (response) {
+     $.ajax({
+       url: '../includes/actions.php',
+       type: 'POST',
+       dataType: 'json',
+       data: Object.assign({ form_type: 'get_payments', csrf_token: CSRF_TOKEN }, (function () {
+         const params = new URLSearchParams(window.location.search);
+         const order = params.get('order') || params.get('order_number');
+         return order ? { order_number: order } : {};
+       })()),
+        success: function (response) {
+         if (window.jQuery && $.fn.DataTable && $.fn.DataTable.isDataTable('#payments-table')) {
+          try { $('#payments-table').DataTable().clear().destroy(); } catch (e) {}
+        }
+
         if (!response || !response.success || !Array.isArray(response.payments)) {
           $tableBody.html('<tr><td colspan="9" class="text-center text-muted small py-4">Unable to load payments.</td></tr>');
           return;
         }
 
-        const payments = response.payments;
-        let pending = 0, approved = 0, rejected = 0;
+         const payments = response.payments;
+         const today = new Date().toISOString().slice(0, 10);
+         let pending = 0, approved = 0, rejected = 0;
+         let approvedToday = 0, rejectedToday = 0;
 
-        $tableBody.html(payments.map(function (p) {
-          if (p.payment_status === 'pending') pending++;
-          else if (p.payment_status === 'approved') approved++;
-          else if (p.payment_status === 'rejected') rejected++;
+         $tableBody.html(payments.map(function (p) {
+           if (p.payment_status === 'pending') pending++;
+           else if (p.payment_status === 'approved') {
+             approved++;
+             if (p.verified_at && String(p.verified_at).slice(0, 10) === today) approvedToday++;
+           } else if (p.payment_status === 'rejected') {
+             rejected++;
+             if (p.verified_at && String(p.verified_at).slice(0, 10) === today) rejectedToday++;
+           }
 
           const customer = escapeHtml(((p.first_name || '') + ' ' + (p.last_name || '')).trim() || 'Customer');
           const badgeClass = statusBadgeClass[p.payment_status] || 'bg-secondary';
@@ -136,7 +187,7 @@
           if (p.payment_status === 'pending') {
             actions = `
               <div class="d-flex flex-wrap gap-1">
-                <button type="button" class="btn btn-xs btn-outline-secondary btn-view-receipt" data-payment-id="${p.id}" data-order-number="${escapeHtml(p.order_number)}" data-customer="${escapeHtml(customer)}" data-method="${escapeHtml(p.method)}" data-ref="${escapeHtml(p.reference_number)}" data-amount="${p.amount}" data-submitted="${escapeHtml(p.created_at)}" data-status="${escapeHtml(p.payment_status)}" data-receipt="${escapeHtml(p.receipt || '')}" title="View Receipt">
+                <button type="button" class="btn btn-xs btn-outline-secondary btn-view-receipt" data-payment-id="${p.id}" data-order-number="${escapeHtml(p.order_number)}" data-customer="${escapeHtml(customer)}" data-method="${escapeHtml(p.method)}" data-ref="${escapeHtml(p.reference_number)}" data-amount="${p.amount}" data-submitted="${escapeHtml(p.verified_at || p.order_created_at || '')}" data-status="${escapeHtml(p.payment_status)}" data-receipt="${escapeHtml(p.receipt || '')}" title="View Receipt">
                   <i class="fa-solid fa-eye"></i>
                 </button>
                 <button type="button" class="btn btn-xs btn-success btn-approve-payment" data-payment-id="${p.id}" data-order-number="${escapeHtml(p.order_number)}" title="Approve">
@@ -149,7 +200,7 @@
             `;
           } else {
             actions = `
-              <button type="button" class="btn btn-xs btn-outline-secondary btn-view-receipt" data-payment-id="${p.id}" data-order-number="${escapeHtml(p.order_number)}" data-customer="${escapeHtml(customer)}" data-method="${escapeHtml(p.method)}" data-ref="${escapeHtml(p.reference_number)}" data-amount="${p.amount}" data-submitted="${escapeHtml(p.created_at)}" data-status="${escapeHtml(p.payment_status)}" data-receipt="${escapeHtml(p.receipt || '')}" title="View Details">
+              <button type="button" class="btn btn-xs btn-outline-secondary btn-view-receipt" data-payment-id="${p.id}" data-order-number="${escapeHtml(p.order_number)}" data-customer="${escapeHtml(customer)}" data-method="${escapeHtml(p.method)}" data-ref="${escapeHtml(p.reference_number)}" data-amount="${p.amount}" data-submitted="${escapeHtml(p.verified_at || p.order_created_at || '')}" data-status="${escapeHtml(p.payment_status)}" data-receipt="${escapeHtml(p.receipt || '')}" title="View Details">
                 <i class="fa-solid fa-eye"></i>
               </button>
             `;
@@ -175,12 +226,17 @@
         }).join(''));
 
         $('#statPending').text(pending);
-        $('#statApproved').text(approved);
-        $('#statRejected').text(rejected);
+        $('#statApproved').text(approvedToday);
+        $('#statRejected').text(rejectedToday);
         $('#statTotal').text(payments.length);
+        initPaymentsTable();
       },
       error: function () {
-        $tableBody.html('<tr><td colspan="9" class="text-center text-muted small py-4">Unable to load payments.</td></tr>');
+        if (window.jQuery && $.fn.DataTable && $.fn.DataTable.isDataTable('#payments-table')) {
+          try { $('#payments-table').DataTable().clear().destroy(); } catch (e) {}
+        }
+        $tableBody.html('<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="text-center text-muted small py-4">Unable to load payments.</td></tr>');
+        initPaymentsTable();
       }
     });
   }
@@ -227,12 +283,13 @@
       url: '../includes/actions.php',
       type: 'POST',
       dataType: 'json',
-      data: {
-        form_type: 'verify_payment',
-        payment_id: paymentId,
-        payment_status: 'approved',
-        remarks: remarks,
-      },
+       data: {
+         form_type: 'verify_payment',
+         csrf_token: CSRF_TOKEN,
+         payment_id: paymentId,
+         payment_status: 'approved',
+         remarks: remarks,
+       },
       success: function (response) {
         if (response && response.success) {
           showToast(response.message || 'Payment approved successfully!', 'success');
@@ -273,12 +330,13 @@
       url: '../includes/actions.php',
       type: 'POST',
       dataType: 'json',
-      data: {
-        form_type: 'verify_payment',
-        payment_id: paymentId,
-        payment_status: 'rejected',
-        remarks: remarks,
-      },
+       data: {
+         form_type: 'verify_payment',
+         csrf_token: CSRF_TOKEN,
+         payment_id: paymentId,
+         payment_status: 'rejected',
+         remarks: remarks,
+       },
       success: function (response) {
         if (response && response.success) {
           showToast(response.message || 'Payment rejected.', 'success');
