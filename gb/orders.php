@@ -38,7 +38,10 @@ $statusBadgeClass = [
   'Pending' => 'bg-warning text-dark',
   'Paid' => 'bg-success',
   'Preparing' => 'bg-warning text-dark',
-  'Out for Delivery' => 'bg-info text-dark',
+  'Assigned' => 'bg-primary',
+  'Picked Up' => 'bg-info text-dark',
+  'Out for Delivery' => 'bg-warning text-dark',
+  'Delivered' => 'bg-success',
   'Completed' => 'bg-success',
   'Cancelled' => 'bg-danger',
 ];
@@ -129,8 +132,8 @@ try {
                     $paymentBadge = $orderStatus === 'Pending' ? 'bg-warning text-dark' : 'bg-success';
                     $orderBadge = $statusBadgeClass[$orderStatus] ?? 'bg-secondary';
                     $orderJson = json_encode($order);
-                  ?>
-                  <tr>
+                   ?>
+                   <tr>
                     <td class="fw-bold"><?= htmlspecialchars($orderNumber) ?></td>
                     <td><?= htmlspecialchars($customerName ?: 'Customer') ?></td>
                     <td><?= htmlspecialchars($contact) ?></td>
@@ -231,31 +234,23 @@ try {
               <button type="button" class="btn btn-sm btn-outline-primary btn-view-receipt" style="display:none;">
                 <i class="fa-solid fa-receipt me-1"></i> View Receipt
               </button>
-              <button type="button" class="btn btn-sm btn-success btn-approve-payment" style="display:none;">
-                <i class="fa-solid fa-check me-1"></i> Approve
-              </button>
-              <button type="button" class="btn btn-sm btn-outline-danger btn-reject-payment" style="display:none;">
-                <i class="fa-solid fa-xmark me-1"></i> Reject
-              </button>
+              <a class="btn btn-sm btn-outline-success" href="payments.php?order=<?= urlencode($orderNumber) ?>">
+                <i class="fa-solid fa-credit-card me-1"></i> Verify in Payments
+              </a>
             </div>
           </div>
           <div class="small text-muted mt-2 payment-submitted-line"></div>
         </div>
 
-        <div class="mt-3 border rounded p-3">
-          <div class="small text-muted mb-2">Update Order Status</div>
-          <div class="d-flex gap-2 flex-wrap">
-             <select class="form-select form-select-sm" id="adminStatusSelect" style="max-width:220px;">
-               <option value="Pending">Pending</option>
-               <option value="Paid">Paid</option>
-               <option value="Preparing">Preparing</option>
-               <option value="Out for Delivery">Out for Delivery</option>
-               <option value="Completed">Completed</option>
-               <option value="Cancelled">Cancelled</option>
-             </select>
-             <div class="small text-muted mt-1" id="adminStatusHelp"></div>
-             <button type="button" class="btn btn-sm btn-success" id="btnAdminSaveStatus">Save Status</button>
+<div class="mt-3 border rounded p-3" id="orderActionsSection" style="display:none">
+          <div class="small text-muted mb-2">Order Actions</div>
+          <div class="d-flex gap-2 flex-wrap" id="orderActionsGroup">
+            <button type="button" class="btn btn-sm btn-primary" id="btnStartPreparing" style="display:none;">Start Preparing</button>
+            <button type="button" class="btn btn-sm btn-success" id="btnMarkCompleted" style="display:none;">Mark Completed</button>
+            <a class="btn btn-sm btn-outline-primary" id="linkAssignRider" href="deliveries.php" style="display:none;">Assign Rider</a>
+            <button type="button" class="btn btn-sm btn-outline-danger" id="btnCancelOrder" style="display:none;">Cancel Order</button>
           </div>
+          <div class="small text-muted mt-2" id="orderActionHelp"></div>
         </div>
 
         <div class="d-flex justify-content-between fw-bold fs-6 mt-3 pt-2 border-top">
@@ -294,10 +289,13 @@ try {
   const orderStatusBadgeClass = {
     'Pending': 'bg-warning text-dark',
     'Paid': 'bg-success',
-    'Preparing': 'bg-warning text-dark',
-    'Out for Delivery': 'bg-info text-dark',
-    'Completed': 'bg-success',
-    'Cancelled': 'bg-danger',
+  'Preparing': 'bg-warning text-dark',
+  'Assigned': 'bg-primary',
+  'Picked Up': 'bg-info text-dark',
+  'Out for Delivery': 'bg-warning text-dark',
+  'Delivered': 'bg-success',
+  'Completed': 'bg-success',
+  'Cancelled': 'bg-danger',
   };
 
   const paymentStatusBadgeClass = {
@@ -359,17 +357,36 @@ try {
 
     $modal.find('.order-modal-total').text(money(totalAmount));
 
-    // Status select
-    $modal.find('#adminStatusSelect').val(orderStatus);
+    // Order action buttons — driven by status, no free-form dropdown
     const isDeliveryOrder = String(order.order_type) !== '0';
-    $modal.find('#adminStatusSelect option').prop('disabled', false);
-    $modal.find('#adminStatusHelp').text('');
-    if (isDeliveryOrder) {
-      $modal.find('#adminStatusSelect option[value="Out for Delivery"], #adminStatusSelect option[value="Completed"]').prop('disabled', true);
-      $modal.find('#adminStatusHelp').text('Delivery and completion statuses are managed on the Delivery page.');
-    }
+    $('#btnStartPreparing').hide();
+    $('#btnMarkCompleted').hide();
+    $('#linkAssignRider').hide();
+    $('#btnCancelOrder').hide();
+    $('#orderActionHelp').text('');
 
-    $modal.find('#orderDispatchTime').text(order.delivery_dispatched_at ? String(order.delivery_dispatched_at).slice(0, 16).replace('T', ' ') : '—');
+    if (orderStatus === 'Paid') {
+      $('#btnStartPreparing').show();
+    }
+    if (orderStatus === 'Preparing') {
+      if (isDeliveryOrder) {
+        $('#linkAssignRider').show();
+        $('#orderActionHelp').text('Assign a rider on the Delivery page to continue.');
+      } else {
+        $('#btnMarkCompleted').show();
+      }
+    }
+    if (orderStatus === 'Pending' || orderStatus === 'Paid' || orderStatus === 'Preparing') {
+      $('#btnCancelOrder').show();
+    }
+if (isDeliveryOrder && (orderStatus === 'Assigned' || orderStatus === 'Picked Up' || orderStatus === 'Out for Delivery' || orderStatus === 'Delivered')) {
+  $('#orderActionHelp').text('Delivery progress is managed by the assigned rider.');
+}
+
+const hasAnyOrderAction = $('#orderActionsGroup .btn:visible, #orderActionsGroup a:visible').length > 0;
+$('#orderActionsSection').toggle(hasAnyOrderAction);
+
+$modal.find('#orderDispatchTime').text(order.delivery_dispatched_at ? String(order.delivery_dispatched_at).slice(0, 16).replace('T', ' ') : '—');
     $modal.find('#orderEta').text(order.delivery_eta ? String(order.delivery_eta).slice(0, 16).replace('T', ' ') : '—');
     $modal.find('#orderRider').text(order.rider_first_name ? ((order.rider_first_name || '') + ' ' + (order.rider_last_name || '')).trim() : 'Unassigned');
     $modal.find('#orderDeliveryDate').text(order.delivery_delivered_at ? String(order.delivery_delivered_at).slice(0, 16).replace('T', ' ') : '—');
@@ -403,30 +420,40 @@ try {
       }
     });
 
-    // Progress Timeline
-    const status = orderStatus;
-    const statusOrder = ['Pending', 'Paid', 'Preparing', 'Out for Delivery', 'Completed'];
-    const statusIndex = statusOrder.indexOf(status);
-    const isCurrent = (s) => statusOrder.indexOf(s) === statusIndex;
-    const isDone = (s) => statusOrder.indexOf(s) < statusIndex;
-    const timelineSteps = [
-      { label: 'Order placed', done: true, current: false },
-      { label: 'Payment received', done: status !== 'Pending', current: status === 'Pending' },
-      { label: 'Preparing food', done: isDone('Preparing'), current: isCurrent('Preparing') },
-      { label: 'Out for delivery', done: isDone('Out for Delivery'), current: isCurrent('Out for Delivery') },
-    ];
-    $modal.find('.progress-timeline-body').html(timelineSteps.map(function (step) {
-      let badgeHtml = step.done
-        ? '<span class="badge bg-success me-2">✓</span>'
-        : (step.current ? '<span class="badge bg-warning text-dark me-2">•</span>' : '<span class="badge bg-secondary me-2">•</span>');
-      return `<div class="d-flex align-items-center mb-2">${badgeHtml}<span>${escapeHtml(step.label)}</span></div>`;
-    }).join(''));
+    // Progress Timeline (unified with customer view)
+    const statusOrder = isDeliveryOrder
+      ? ['Pending', 'Paid', 'Preparing', 'Assigned', 'Picked Up', 'Out for Delivery', 'Delivered']
+      : ['Pending', 'Paid', 'Preparing', 'Completed'];
+
+    let timelineStatus = orderStatus;
+    if (isDeliveryOrder && timelineStatus === 'Completed') {
+      timelineStatus = 'Delivered';
+    }
+    const statusIndex = statusOrder.indexOf(timelineStatus);
+    const isLastStep = statusIndex === statusOrder.length - 1;
+
+    if (orderStatus === 'Cancelled') {
+      $modal.find('.progress-timeline-body').html('<div class="text-danger small">Order cancelled.</div>');
+    } else {
+      const timelineSteps = statusOrder.map(function (s, idx) {
+        const done = (idx < statusIndex) || (isLastStep && idx === statusIndex);
+        const current = (idx === statusIndex) && !isLastStep;
+        return { label: s, done: done, current: current };
+      });
+
+      $modal.find('.progress-timeline-body').html(timelineSteps.map(function (step) {
+        let badgeHtml = step.done
+          ? '<span class="badge bg-success me-2">✓</span>'
+          : (step.current ? '<span class="badge bg-warning text-dark me-2">•</span>' : '<span class="badge bg-secondary me-2">•</span>');
+        return `<div class="d-flex align-items-center mb-2">${badgeHtml}<span>${escapeHtml(step.label)}</span></div>`;
+      }).join(''));
+    }
 
     // Payment Verification section
     const $badge = $modal.find('.payment-status-badge');
     $badge.removeClass('bg-warning text-dark bg-success bg-danger bg-secondary')
           .addClass(paymentStatusBadgeClass[order.payment_status] || 'bg-secondary')
-          .text(order.payment_status || '—');
+          .text(paymentStatusText(order.payment_status) || '—');
 
     const $viewReceiptBtn = $modal.find('.btn-view-receipt');
     const $approveBtn = $modal.find('.btn-approve-payment');
@@ -614,22 +641,17 @@ try {
     });
   });
 
-  // Status Save
-  $('#btnAdminSaveStatus').on('click', function () {
-    const order = currentViewOrder;
-    if (!order) return;
-    const newStatus = $('#adminStatusSelect').val();
-    const remarks = 'Status updated by admin';
-
+  // Order action handlers
+  function updateOrderStatus(orderId, newStatus, remarks) {
     $.ajax({
       url: '../includes/actions.php',
       type: 'POST',
       dataType: 'json',
       data: {
         form_type: 'update_order_status',
-        order_id: order.id,
+        order_id: orderId,
         new_status: newStatus,
-        remarks: remarks,
+        remarks: remarks || 'Status updated by admin',
       },
       success: function (response) {
         if (response && response.success) {
@@ -643,6 +665,25 @@ try {
         showToast('Something went wrong while updating status.', 'danger');
       }
     });
+  }
+
+  $(document).on('click', '#btnStartPreparing', function () {
+    const order = currentViewOrder;
+    if (!order) return;
+    updateOrderStatus(order.id, 'Preparing', 'Started preparing');
+  });
+
+  $(document).on('click', '#btnMarkCompleted', function () {
+    const order = currentViewOrder;
+    if (!order) return;
+    updateOrderStatus(order.id, 'Completed', 'Order completed');
+  });
+
+  $(document).on('click', '#btnCancelOrder', function () {
+    const order = currentViewOrder;
+    if (!order) return;
+    if (!confirm('Cancel this order?')) return;
+    updateOrderStatus(order.id, 'Cancelled', 'Cancelled by admin');
   });
 
   // Open verify/reject modals from receipt modal buttons

@@ -1,0 +1,21 @@
+# Environment
+.env
+.env.*
+
+# Uploads
+img/payments/
+img/menu/
+img/settings/
+
+# Logs
+storage/logs/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp

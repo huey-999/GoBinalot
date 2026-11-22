@@ -16,7 +16,7 @@ $myOrders = [];
 if ($userId) {
   try {
     $stmt = $conn->prepare("
-      SELECT o.id, o.order_number, o.subtotal, o.delivery_fee, o.total_amount, o.order_status, o.created_at,
+      SELECT o.id, o.order_number, o.order_type, o.subtotal, o.delivery_fee, o.total_amount, o.order_status, o.created_at,
              u.first_name, u.last_name, a.contact_number, a.address,
               d.dispatched_at AS delivery_dispatched_at, d.eta AS delivery_eta,
               d.delivered_at AS delivery_delivered_at,
@@ -42,10 +42,13 @@ if ($userId) {
 $statusBadgeClass = [
   'Pending' => 'bg-warning text-dark',
   'Paid' => 'bg-success',
-  'Preparing' => 'bg-warning text-dark',
-  'Out for Delivery' => 'bg-info text-dark',
-  'Completed' => 'bg-success',
-  'Cancelled' => 'bg-danger',
+   'Preparing' => 'bg-warning text-dark',
+   'Assigned' => 'bg-primary',
+   'Picked Up' => 'bg-info text-dark',
+   'Out for Delivery' => 'bg-warning text-dark',
+   'Delivered' => 'bg-success',
+   'Completed' => 'bg-success',
+   'Cancelled' => 'bg-danger',
 ];
 ?>
 <main class="main-content">
@@ -106,6 +109,11 @@ $statusBadgeClass = [
                             <i class="fa-solid fa-qrcode"></i>
                           </button>
                         <?php endif; ?>
+                        <?php if ($isCustomer && (int) ($order['order_type'] ?? 0) === 1 && $orderStatus === 'Delivered') : ?>
+                          <button type="button" class="btn btn-xs btn-primary btn-confirm-delivery" data-order-id="<?= $order['id'] ?>" title="Confirm Delivery">
+                            <i class="fa-solid fa-check"></i>
+                          </button>
+                        <?php endif; ?>
                       </div>
                     </td>
                   </tr>
@@ -156,6 +164,9 @@ $statusBadgeClass = [
           <div class="d-flex justify-content-between small mb-1"><span>Dispatched</span><span id="orderDispatchTime">—</span></div>
           <div class="d-flex justify-content-between small mb-1"><span>ETA</span><span id="orderEta">—</span></div>
           <div class="d-flex justify-content-between small mb-1"><span>Delivered</span><span id="orderDeliveryDate">—</span></div>
+          <div class="mt-2" id="confirmDeliveryWrap" style="display:none;">
+            <button type="button" class="btn btn-sm btn-primary" id="btnConfirmDelivery">Confirm Delivery</button>
+          </div>
         </div>
 
         <div class="mt-3 border rounded p-3">
@@ -244,10 +255,13 @@ $gcashQrUrl = getSystemSetting('gcash_qr_image_url', '');
   const orderStatusBadgeClass = {
     'Pending': 'bg-warning text-dark',
     'Paid': 'bg-success',
-    'Preparing': 'bg-warning text-dark',
-    'Out for Delivery': 'bg-info text-dark',
-    'Completed': 'bg-success',
-    'Cancelled': 'bg-danger',
+   'Preparing': 'bg-warning text-dark',
+   'Assigned': 'bg-primary',
+   'Picked Up': 'bg-info text-dark',
+   'Out for Delivery': 'bg-warning text-dark',
+   'Delivered': 'bg-success',
+   'Completed': 'bg-success',
+   'Cancelled': 'bg-danger',
   };
 
   // Populate view order modal dynamically from order data
@@ -342,40 +356,74 @@ $gcashQrUrl = getSystemSetting('gcash_qr_image_url', '');
           `;
         }).join(''));
       },
-      error: function () {
-        $itemsBody.html('<tr><td colspan="4" class="text-center text-muted small">Unable to load items.</td></tr>');
-      }
-    });
+       error: function () {
+         $itemsBody.html('<tr><td colspan="4" class="text-center text-muted small">Unable to load items.</td></tr>');
+       }
+     });
 
-    // Progress Timeline
-    const status = order.order_status || 'Pending';
-    const statusOrder = ['Pending', 'Preparing', 'Out for Delivery', 'Completed'];
-    const statusIndex = statusOrder.indexOf(status);
-    const isCurrent = (s) => statusOrder.indexOf(s) === statusIndex;
-    const isDone = (s) => statusOrder.indexOf(s) < statusIndex;
+     // Progress Timeline
+     const status = order.order_status || 'Pending';
+     const isDeliveryOrder = String(order.order_type) !== '0';
+     const statusOrder = isDeliveryOrder
+       ? ['Pending', 'Paid', 'Preparing', 'Assigned', 'Picked Up', 'Out for Delivery', 'Delivered']
+       : ['Pending', 'Paid', 'Preparing', 'Completed'];
 
-    const timelineSteps = [
-      { label: 'Order placed', done: true, current: false },
-      { label: 'Payment received', done: status !== 'Pending', current: status === 'Pending' },
-      { label: 'Preparing food', done: isDone('Preparing'), current: isCurrent('Preparing') },
-      { label: 'Out for delivery', done: isDone('Out for Delivery'), current: isCurrent('Out for Delivery') },
-    ];
+     let timelineStatus = status;
+     if (isDeliveryOrder && timelineStatus === 'Completed') {
+       timelineStatus = 'Delivered';
+     }
+     const statusIndex = statusOrder.indexOf(timelineStatus);
+     const isLastStep = statusIndex === statusOrder.length - 1;
 
-    $modal.find('.progress-timeline-body').html(timelineSteps.map(function (step) {
-      let badgeHtml;
-      if (step.done) {
-        badgeHtml = '<span class="badge bg-success me-2">✓</span>';
-      } else if (step.current) {
-        badgeHtml = '<span class="badge bg-warning text-dark me-2">•</span>';
-      } else {
-        badgeHtml = '<span class="badge bg-secondary me-2">•</span>';
-      }
-      return `
-        <div class="d-flex align-items-center mb-2">
-          ${badgeHtml}
-          <span>${escapeHtml(step.label)}</span>
-        </div>
-      `;
-    }).join(''));
-  });
-</script>
+     if (status === 'Cancelled') {
+       $modal.find('.progress-timeline-body').html('<div class="text-danger small">Order cancelled.</div>');
+     } else {
+       const timelineSteps = statusOrder.map(function (s, idx) {
+         const done = (idx < statusIndex) || (isLastStep && idx === statusIndex);
+         const current = (idx === statusIndex) && !isLastStep;
+         return { label: s, done: done, current: current };
+       });
+
+       $modal.find('.progress-timeline-body').html(timelineSteps.map(function (step) {
+         let badgeHtml = step.done
+           ? '<span class="badge bg-success me-2">✓</span>'
+           : (step.current ? '<span class="badge bg-warning text-dark me-2">•</span>' : '<span class="badge bg-secondary me-2">•</span>');
+         return `<div class="d-flex align-items-center mb-2">${badgeHtml}<span>${escapeHtml(step.label)}</span></div>`;
+       }).join(''));
+     }
+
+     const showConfirm = isDeliveryOrder && status === 'Delivered';
+     $('#confirmDeliveryWrap').toggle(showConfirm);
+     $('#btnConfirmDelivery').data('order-id', order.id);
+   });
+
+   function confirmDelivery(orderId) {
+     $.ajax({
+       url: '../includes/actions.php',
+       type: 'POST',
+       dataType: 'json',
+       data: { form_type: 'confirm_delivery', order_id: orderId },
+       success: function (response) {
+         if (response && response.success) {
+           if (typeof showToast === 'function') showToast(response.message || 'Delivery confirmed.', 'success');
+           setTimeout(function () { window.location.reload(); }, 600);
+           return;
+         }
+         alert((response && response.message) ? response.message : 'Failed to confirm delivery.');
+       },
+       error: function () {
+         alert('Something went wrong while confirming delivery.');
+       }
+     });
+   }
+
+   $(document).on('click', '#btnConfirmDelivery', function () {
+     const orderId = $(this).data('order-id');
+     if (orderId) confirmDelivery(orderId);
+   });
+
+   $(document).on('click', '.btn-confirm-delivery', function () {
+     const orderId = $(this).data('order-id');
+     if (orderId) confirmDelivery(orderId);
+   });
+ </script>

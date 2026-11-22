@@ -168,12 +168,15 @@ $deliveryStatusBadge = [
                     <td><?= htmlspecialchars($riderName) ?></td>
                     <td><?= htmlspecialchars($dispatch) ?></td>
                     <td><?= htmlspecialchars($eta) ?></td>
-                    <td><span class="badge <?= $badgeClass ?>"><?= htmlspecialchars($label) ?></span></td>
+                    <td>
+<span class="badge <?= $badgeClass ?>"><?= htmlspecialchars($label) ?></span>
+</td>
                     <td>
                       <div class="d-flex flex-wrap gap-1">
                         <button class="btn btn-xs btn-outline-secondary view-delivery" data-delivery-id="<?= (int) $d['id'] ?>"><i class="fa-solid fa-eye"></i></button>
+                        <?php if ($status === 'pending_dispatch') : ?>
                         <button class="btn btn-xs btn-success assign-delivery" data-order-id="<?= (int) $d['order_id'] ?>" data-delivery-id="<?= (int) $d['id'] ?>"><i class="fa-solid fa-user-plus"></i></button>
-                        <button class="btn btn-xs btn-outline-primary status-delivery" data-delivery-id="<?= (int) $d['id'] ?>" data-status="<?= htmlspecialchars($status) ?>"><i class="fa-solid fa-arrow-right"></i></button>
+                        <?php endif; ?>
                       </div>
                     </td>
                   </tr>
@@ -256,7 +259,7 @@ $deliveryStatusBadge = [
               <div class="d-flex justify-content-between small mb-1"><span>Dispatched</span><span id="ddDispatch"></span></div>
               <div class="d-flex justify-content-between small mb-1"><span>ETA</span><span id="ddEta"></span></div>
               <div class="d-flex justify-content-between small mb-1"><span>Delivered</span><span id="ddDeliveryDate"></span></div>
-              <div class="d-flex justify-content-between small mb-1"><span>Delivery Status</span><span id="ddStatus"></span></div>
+<div class="d-flex justify-content-between small mb-1"><span>Delivery Status</span><span id="ddStatus"></span></div>
               <div class="d-flex justify-content-between small mb-1"><span>Order Status</span><span id="ddOrderStatus"></span></div>
               <div class="d-flex justify-content-between small mb-1"><span>Total</span><span class="fw-bold" id="ddTotal"></span></div>
             </div>
@@ -304,38 +307,6 @@ $deliveryStatusBadge = [
       <div class="modal-footer border-0 pt-0">
         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
         <button type="button" class="btn btn-success btn-sm" id="saveAssignBtn">Assign</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Status modal -->
-<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow-sm">
-      <div class="modal-header border-0 pb-2">
-        <h5 class="modal-title fw-bold text-success">Update Delivery Status</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body p-3">
-        <input type="hidden" id="statusDeliveryId">
-        <label class="form-label small text-muted">Status</label>
-        <select class="form-select form-select-sm mb-3" id="statusSelect">
-          <option value="pending_dispatch">Pending Dispatch</option>
-          <option value="assigned">Assigned</option>
-          <option value="picked_up">Picked Up</option>
-          <option value="out_for_delivery">Out for Delivery</option>
-          <option value="delivered">Delivered</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-        <label class="form-label small text-muted">Failure Reason (for cancelled)</label>
-        <input type="text" class="form-control form-control-sm mb-3" id="statusFailureReason">
-        <label class="form-label small text-muted">Notes</label>
-        <textarea class="form-control form-control-sm" rows="3" id="statusNotes"></textarea>
-      </div>
-      <div class="modal-footer border-0 pt-0">
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-        <button type="button" class="btn btn-success btn-sm" id="saveStatusBtn">Save</button>
       </div>
     </div>
   </div>
@@ -519,31 +490,6 @@ $deliveryStatusBadge = [
           window.location.reload();
         } else {
           alert(response.message || 'Failed to assign rider.');
-        }
-      });
-    });
-
-    $(document).on('click', '.status-delivery', function () {
-      $('#statusDeliveryId').val($(this).data('delivery-id'));
-      $('#statusSelect').val($(this).data('status'));
-      $('#statusFailureReason').val('');
-      $('#statusNotes').val('');
-      new bootstrap.Modal(document.getElementById('statusModal')).show();
-    });
-
-    $('#saveStatusBtn').on('click', function () {
-      postAction({
-        form_type: 'update_delivery_status',
-        delivery_id: $('#statusDeliveryId').val(),
-        delivery_status: $('#statusSelect').val(),
-        failure_reason: $('#statusFailureReason').val(),
-        notes: $('#statusNotes').val()
-      }, function (response) {
-        if (response.success) {
-          bootstrap.Modal.getInstance(document.getElementById('statusModal')).hide();
-          window.location.reload();
-        } else {
-          alert(response.message || 'Failed to update delivery status.');
         }
       });
     });

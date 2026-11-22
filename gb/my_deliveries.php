@@ -181,6 +181,7 @@ include '../includes/admin_header.php';
               <div class="d-flex justify-content-between small mb-1"><span>Delivered</span><span id="ddDeliveryDate"></span></div>
               <div class="d-flex justify-content-between small mb-1"><span>Delivery Status</span><span id="ddStatus"></span></div>
               <div class="d-flex justify-content-between small mb-1"><span>Order Status</span><span id="ddOrderStatus"></span></div>
+              <div class="d-flex justify-content-between small mb-1"><span>Notes</span><span id="ddNotesText">—</span></div>
                <div class="d-flex justify-content-between small mb-1"><span>Total</span><span class="fw-bold" id="ddTotal"></span></div>
              </div>
            </div>
@@ -196,26 +197,39 @@ include '../includes/admin_header.php';
          </div>
          <div class="row g-3 mt-2">
            <div class="col-12">
-             <div class="border rounded p-3" id="ddStatusSection">
-               <div class="small text-muted mb-2">Update Status</div>
-               <label class="form-label small text-muted">Status</label>
-               <select class="form-select form-select-sm mb-2" id="ddStatusSelect">
-                 <option value="pending_dispatch">Pending Dispatch</option>
-                 <option value="assigned">Assigned</option>
-                 <option value="picked_up">Picked Up</option>
-                 <option value="out_for_delivery">Out for Delivery</option>
-                 <option value="delivered">Delivered</option>
-                 <option value="cancelled">Cancelled</option>
-               </select>
-               <label class="form-label small text-muted">Failure Reason (for cancelled)</label>
-               <input type="text" class="form-control form-control-sm mb-2" id="ddFailureReason">
-               <label class="form-label small text-muted">Notes</label>
-               <textarea class="form-control form-control-sm mb-2" rows="2" id="ddNotes"></textarea>
-               <div class="small text-muted mb-2" id="ddStatusLockMessage"></div>
-               <button type="button" class="btn btn-success btn-sm" id="ddSaveStatusBtn">Save Status</button>
-             </div>
+<div class="border rounded p-3" id="ddStatusSection" style="display:none">
+                <div class="small text-muted mb-2">Update Status</div>
+                <div class="d-flex gap-2 flex-wrap mb-2" id="riderActionButtons">
+                  <button type="button" class="btn btn-success btn-sm" id="btnMarkPickedUp" style="display:none;">Mark Picked Up</button>
+                  <button type="button" class="btn btn-primary btn-sm" id="btnStartDelivery" style="display:none;">Start Delivery</button>
+                  <button type="button" class="btn btn-success btn-sm" id="btnMarkDelivered" style="display:none;">Mark Delivered</button>
+                  <button type="button" class="btn btn-outline-danger btn-sm" id="btnCancelDelivery" style="display:none;">Cancel Delivery</button>
+                </div>
+                <div class="small text-muted mb-2" id="ddStatusLockMessage"></div>
+              </div>
            </div>
          </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Cancel delivery modal -->
+<div class="modal fade" id="cancelDeliveryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-sm">
+      <div class="modal-header border-0 pb-2">
+        <h5 class="modal-title fw-bold text-danger">Cancel Delivery</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <p class="small text-muted mb-2">Confirm that this delivery should be cancelled.</p>
+        <label class="form-label small text-muted">Failure Reason</label>
+        <textarea class="form-control form-control-sm" rows="2" id="cancelFailureReason" placeholder="Reason for cancelling this delivery"></textarea>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Keep Delivery</button>
+        <button type="button" class="btn btn-danger btn-sm" id="confirmCancelDelivery">Confirm Cancel</button>
       </div>
     </div>
   </div>
@@ -297,25 +311,52 @@ include '../includes/admin_header.php';
         }).join('') : '<tr><td colspan="3" class="text-center text-muted small">No items found.</td></tr>');
 
         window.currentDeliveryId = deliveryId;
-        const currentStatus = d.delivery_status || 'pending_dispatch';
-        $('#ddStatusSelect').val(currentStatus);
-        $('#ddFailureReason').val(d.failure_reason || '');
-        $('#ddNotes').val(d.notes || '');
+        const currentStatus = d.delivery_status || 'assigned';
+        const deliveryTransitions = {
+          pending_dispatch: [],
+          assigned: ['picked_up', 'cancelled'],
+          picked_up: ['out_for_delivery', 'cancelled'],
+          out_for_delivery: ['delivered', 'cancelled'],
+          delivered: [],
+          cancelled: []
+        };
         const locked = currentStatus === 'delivered' || currentStatus === 'cancelled';
-        $('#ddStatusSelect, #ddFailureReason, #ddNotes, #ddSaveStatusBtn').prop('disabled', locked);
-        $('#ddStatusLockMessage').text(locked ? 'This delivery is already ' + currentStatus.replace(/_/g, ' ') + ' and cannot be edited.' : '');
-      });
-      new bootstrap.Modal(document.getElementById('deliveryDetailsModal')).show();
+
+        $('#btnMarkPickedUp, #btnStartDelivery, #btnMarkDelivered, #btnCancelDelivery').hide();
+        if (!locked) {
+          if (currentStatus === 'assigned') {
+            $('#btnMarkPickedUp, #btnCancelDelivery').show();
+          } else if (currentStatus === 'picked_up') {
+            $('#btnStartDelivery, #btnCancelDelivery').show();
+          } else if (currentStatus === 'out_for_delivery') {
+            $('#btnMarkDelivered, #btnCancelDelivery').show();
+          }
+        }
+
+        const hasAnyRiderAction = $('#riderActionButtons .btn:visible').length > 0;
+        $('#ddStatusSection').toggle(hasAnyRiderAction);
+
+        // Display notes as read-only text; store original for reference
+        const notesText = d.notes ? String(d.notes) : '—';
+        $('#ddNotesText').text(notesText);
+        $('#ddNotes').hide();
+
+        // Cancel delivery: open confirmation modal with stored failure reason
+        const storedFailure = d.failure_reason || '';
+        $('#cancelFailureReason').val(storedFailure);
+        window.cancelDeliveryId = deliveryId;
+        window.cancelCurrentStatus = currentStatus;
+
+        new bootstrap.Modal(document.getElementById('deliveryDetailsModal')).show();
     });
 
-    $('#ddSaveStatusBtn').on('click', function () {
-      if ($(this).prop('disabled')) return;
+    function updateDeliveryStatus(targetStatus) {
       postAction({
         form_type: 'update_delivery_status',
         delivery_id: window.currentDeliveryId,
-        delivery_status: $('#ddStatusSelect').val(),
-        failure_reason: $('#ddFailureReason').val(),
-        notes: $('#ddNotes').val()
+        delivery_status: targetStatus,
+        failure_reason: '',
+        notes: ''
       }, function (response) {
         if (response.success) {
           window.location.reload();
@@ -323,6 +364,37 @@ include '../includes/admin_header.php';
           alert(response.message || 'Failed to update delivery status.');
         }
       });
+    }
+
+    $('#btnMarkPickedUp').on('click', function () { updateDeliveryStatus('picked_up'); });
+    $('#btnStartDelivery').on('click', function () { updateDeliveryStatus('out_for_delivery'); });
+    $('#btnMarkDelivered').on('click', function () { updateDeliveryStatus('delivered'); });
+
+    // Cancel delivery: open modal instead of direct update
+    $('#btnCancelDelivery').on('click', function () {
+      new bootstrap.Modal(document.getElementById('cancelDeliveryModal')).show();
     });
+
+    // Confirm cancel from modal
+    $('#confirmCancelDelivery').on('click', function () {
+      const reason = $('#cancelFailureReason').val().trim();
+      postAction({
+        form_type: 'update_delivery_status',
+        delivery_id: window.currentDeliveryId,
+        delivery_status: 'cancelled',
+        failure_reason: reason,
+        notes: ''
+      }, function (response) {
+        if (response.success) {
+          bootstrap.Modal.getInstance(document.getElementById('cancelDeliveryModal')).hide();
+          window.location.reload();
+        } else {
+          alert(response.message || 'Failed to cancel delivery.');
+        }
+      });
+    });
+
+    });
+
   });
 </script>
